@@ -1,0 +1,339 @@
+{
+  "results": [
+    {
+      "test_case": {
+        "name": "简单问候",
+        "message": "你好",
+        "user_id": "test_user_1",
+        "expected_type": "quick"
+      },
+      "timestamp": "2026-02-01T21:42:33.068907",
+      "daisy_server": {
+        "success": true,
+        "response": {
+          "status": "queued",
+          "message": "Message received and processing started.",
+          "data": {
+            "user_message_id": 325,
+            "timestamp": "2026-02-01T13:42:33.212477"
+          }
+        },
+        "final_response": "你好呀，今天过得怎么样？"
+      },
+      "daisy_skills": {
+        "success": true,
+        "response": {
+          "response": "你好！我是你的AI助手，很高兴为你服务。有什么我可以帮助你的吗？无论是回答问题、提供建议，还是协助处理任务，我都在这里为你效劳！ 😊",
+          "session_id": "test_user_1_default",
+          "conversation_id": "test_user_1_default_conv"
+        }
+      },
+      "comparison": {
+        "both_success": true,
+        "both_failed": false,
+        "server_success": true,
+        "skills_success": true,
+        "summary": "两个服务都成功响应"
+      }
+    },
+    {
+      "test_case": {
+        "name": "情感表达 - 快乐",
+        "message": "我今天心情特别好，因为考试通过了！",
+        "user_id": "test_user_2",
+        "expected_type": "context_aware"
+      },
+      "timestamp": "2026-02-01T21:42:40.617938",
+      "daisy_server": {
+        "success": true,
+        "response": {
+          "status": "queued",
+          "message": "Message received and processing started.",
+          "data": {
+            "user_message_id": 327,
+            "timestamp": "2026-02-01T13:42:40.623451"
+          }
+        },
+        "final_response": null
+      },
+      "daisy_skills": {
+        "success": true,
+        "response": {
+          "response": "（眼睛一亮，声音轻快）太棒啦！这确实值得开心一整天呢～要不要吃点甜点庆祝？我知道有家新开的蛋糕店，草莓塔上的糖霜会闪闪发光哦✨",
+          "session_id": "test_user_2_default",
+          "conversation_id": "test_user_2_default_conv"
+        }
+      },
+      "comparison": {
+        "both_success": true,
+        "both_failed": false,
+        "server_success": true,
+        "skills_success": true,
+        "summary": "两个服务都成功响应"
+      }
+    },
+    {
+      "test_case": {
+        "name": "情感表达 - 悲伤",
+        "message": "我很难过，我的宠物去世了",
+        "user_id": "test_user_3",
+        "expected_type": "context_aware"
+      },
+      "timestamp": "2026-02-01T21:43:25.827319",
+      "daisy_server": {
+        "success": true,
+        "response": {
+          "status": "queued",
+          "message": "Message received and processing started.",
+          "data": {
+            "user_message_id": 329,
+            "timestamp": "2026-02-01T13:43:25.836880"
+          }
+        },
+        "final_response": null
+      },
+      "daisy_skills": {
+        "success": true,
+        "response": {
+          "response": "听到这个消息，我真的很心疼你。失去一个陪伴自己的伙伴，那种空落落的感觉一定很难熬。宠物不仅是动物，它们是我们生活中默默倾听的伙伴，是回家时摇着尾巴的温暖，是很多孤独时刻里柔软的依靠。\n\n如果你愿意，可以和我聊聊它吗？它叫什么名字？是什么样的小家伙？也许回忆那些它打翻花瓶、偷吃零食的趣事，或是它安静蜷在你膝盖上的时刻，会让心里的重量轻一点点。你也可以为它做点什么——种一株它喜欢待着的那片窗台的花，或者写一封给它的信，把没说完的话慢慢写下来。\n\n这段时间，记得对自己温柔一些。允许自己哭，允许自己发呆，允许自己暂时做什么都提不起劲。这不是“脆弱”，这是你在认真对待一段珍贵的感情。如果身边有理解你的朋友，也可以试着和他们聊聊。需要的话，我随时在这里陪你。\n\n你并不孤单。",
+          "session_id": "test_user_3_default",
+          "conversation_id": "test_user_3_default_conv"
+        }
+      },
+      "comparison": {
+        "both_success": true,
+        "both_failed": false,
+        "server_success": true,
+        "skills_success": true,
+        "summary": "两个服务都成功响应"
+      }
+    },
+    {
+      "test_case": {
+        "name": "工具调用 - 搜索",
+        "message": "帮我搜索一下人工智能的最新发展",
+        "user_id": "test_user_4",
+        "expected_type": "tool_required"
+      },
+      "timestamp": "2026-02-01T21:44:15.237598",
+      "daisy_server": {
+        "success": true,
+        "response": {
+          "status": "queued",
+          "message": "Message received and processing started.",
+          "data": {
+            "user_message_id": 331,
+            "timestamp": "2026-02-01T13:44:15.244818"
+          }
+        },
+        "final_response": null
+      },
+      "daisy_skills": {
+        "success": true,
+        "response": {
+          "response": "我目前无法直接进行实时网络搜索，但我可以基于已有知识为您介绍人工智能领域的一些最新发展趋势（截至2024年初）：\n\n**1. 生成式AI的突破**\n   - **多模态模型**：如GPT-4V、Gemini等能同时处理文本、图像、音频\n   - **开源模型爆发**：Llama、Mistral等降低技术门槛\n   - **视频生成进步**：Runway、Pika等工具实现高质量视频生成\n\n**2. 具身智能（Embodied AI）**\n   - 机器人结合大语言模型（如Google的RT-2）\n   - 让AI在物理世界中执行复杂任务\n\n**3. 边缘AI部署**\n   - 模型轻量化，在手机、IoT设备本地运行\n   - 苹果、高通等公司推动终端侧AI\n\n**4. AI治理与安全**\n   - 全球AI安全峰会、欧盟AI法案等监管进展\n   - 模型对齐、可解释性研究加强\n\n**5. 科学AI应用**\n   - AlphaFold3推进蛋白质结构预测\n   - AI辅助新材料、药物发现\n\n**建议获取最新信息途径：**\n- 关注NeurIPS、ICLR等顶级会议论文\n- 查看OpenAI、DeepMind、Anthropic等机构官网\n- 科技媒体如arXiv.org的最新预印本\n\n如果您有具体方向（如医疗AI、自动驾驶等），我可以提供更聚焦的信息。需要我针对某个领域详细介绍吗？",
+          "session_id": "test_user_4_default",
+          "conversation_id": "test_user_4_default_conv"
+        }
+      },
+      "comparison": {
+        "both_success": true,
+        "both_failed": false,
+        "server_success": true,
+        "skills_success": true,
+        "summary": "两个服务都成功响应"
+      }
+    },
+    {
+      "test_case": {
+        "name": "工具调用 - 记忆",
+        "message": "记住我喜欢喝咖啡",
+        "user_id": "test_user_5",
+        "expected_type": "tool_required"
+      },
+      "timestamp": "2026-02-01T21:45:08.439661",
+      "daisy_server": {
+        "success": true,
+        "response": {
+          "status": "queued",
+          "message": "Message received and processing started.",
+          "data": {
+            "user_message_id": 332,
+            "timestamp": "2026-02-01T13:45:08.445295"
+          }
+        },
+        "final_response": "好啊，最近进展还挺多的。你是想了解某个特定领域，比如医疗或者创作这些，还是想先听听整体的趋势？"
+      },
+      "daisy_skills": {
+        "success": true,
+        "response": {
+          "response": "好的，已经记住您喜欢喝咖啡啦！☕ 如果您需要推荐咖啡种类、冲泡方法，或是想聊聊咖啡相关的话题，随时告诉我哦～",
+          "session_id": "test_user_5_default",
+          "conversation_id": "test_user_5_default_conv"
+        }
+      },
+      "comparison": {
+        "both_success": true,
+        "both_failed": false,
+        "server_success": true,
+        "skills_success": true,
+        "summary": "两个服务都成功响应"
+      }
+    },
+    {
+      "test_case": {
+        "name": "普通问题",
+        "message": "什么是机器学习？",
+        "user_id": "test_user_6",
+        "expected_type": "standard"
+      },
+      "timestamp": "2026-02-01T21:45:21.468136",
+      "daisy_server": {
+        "success": true,
+        "response": {
+          "status": "queued",
+          "message": "Message received and processing started.",
+          "data": {
+            "user_message_id": 334,
+            "timestamp": "2026-02-01T13:45:21.475009"
+          }
+        },
+        "final_response": null
+      },
+      "daisy_skills": {
+        "success": true,
+        "response": {
+          "response": "机器学习是人工智能（AI）的一个分支，旨在通过数据和算法让计算机系统具备“学习”能力，而无需依赖明确的程序指令。其核心思想是：通过分析大量数据，自动发现规律或模式，并利用这些规律进行预测或决策。\n\n### 关键特点：\n1. **数据驱动**：依赖数据而非人工规则。\n2. **自动优化**：通过训练过程逐步改进性能。\n3. **泛化能力**：学习到的模式可应用于新数据。\n\n### 主要类型：\n- **监督学习**：使用带标签的数据训练模型（如分类、回归）。\n- **无监督学习**：从无标签数据中发现隐藏结构（如聚类、降维）。\n- **强化学习**：通过试错与环境交互，以最大化奖励（如游戏AI、机器人控制）。\n\n### 常见应用：\n- 推荐系统（如Netflix、淘宝）\n- 图像识别（如人脸识别、医疗影像分析）\n- 自然语言处理（如翻译、聊天机器人）\n- 自动驾驶、金融风控等\n\n### 典型流程：\n1. 数据收集与预处理\n2. 选择模型（如神经网络、决策树）\n3. 训练与调参\n4. 评估与部署\n\n机器学习正推动各领域智能化，但也面临数据质量、算法偏见、可解释性等挑战。需要进一步探讨具体方向吗？",
+          "session_id": "test_user_6_default",
+          "conversation_id": "test_user_6_default_conv"
+        }
+      },
+      "comparison": {
+        "both_success": true,
+        "both_failed": false,
+        "server_success": true,
+        "skills_success": true,
+        "summary": "两个服务都成功响应"
+      }
+    },
+    {
+      "test_case": {
+        "name": "多轮对话",
+        "messages": [
+          "你好",
+          "我想了解人工智能",
+          "人工智能有哪些应用？",
+          "谢谢你的解释"
+        ],
+        "user_id": "test_user_7"
+      },
+      "timestamp": "2026-02-01T21:46:12.883305",
+      "daisy_server": [
+        {
+          "message": "你好",
+          "success": true,
+          "response": {
+            "status": "queued",
+            "message": "Message received and processing started.",
+            "data": {
+              "user_message_id": 335,
+              "timestamp": "2026-02-01T13:46:12.891744"
+            }
+          },
+          "final_response": "好嘞，记在小本本上了。喜欢什么口味？下次要是碰面，说不定可以请你喝一杯。"
+        },
+        {
+          "message": "我想了解人工智能",
+          "success": true,
+          "response": {
+            "status": "queued",
+            "message": "Message received and processing started.",
+            "data": {
+              "user_message_id": 337,
+              "timestamp": "2026-02-01T13:46:17.115693"
+            }
+          },
+          "final_response": null
+        },
+        {
+          "message": "人工智能有哪些应用？",
+          "success": true,
+          "response": {
+            "status": "queued",
+            "message": "Message received and processing started.",
+            "data": {
+              "user_message_id": 339,
+              "timestamp": "2026-02-01T13:47:20.856956"
+            }
+          },
+          "final_response": "行，那咱们就从最基础的聊起。简单理解，人工智能就是让机器拥有一定程度的“智能”，能像人一样思考、学习、解决问题。它现在就像一个学得很快的学生，正在各个领域大展拳脚呢。你对哪个方面最好奇？是它怎么改变我们的生活，还是它背后的技术原理？"
+        },
+        {
+          "message": "谢谢你的解释",
+          "success": true,
+          "response": {
+            "status": "queued",
+            "message": "Message received and processing started.",
+            "data": {
+              "user_message_id": 341,
+              "timestamp": "2026-02-01T13:48:21.625560"
+            }
+          },
+          "final_response": "那可太多了，简直无处不在。比如你手机里的语音助手、地图导航的智能推荐，还有帮你自动修图的软件，背后都是AI在干活。"
+        }
+      ],
+      "daisy_skills": [
+        {
+          "message": "你好",
+          "success": true,
+          "response": {
+            "response": "你好！很高兴见到你！有什么我可以帮助你的吗？无论是回答问题、提供建议，还是协助处理任务，我都很乐意为你服务！ 😊",
+            "session_id": "test_user_7_test_1769953572.883317",
+            "conversation_id": "test_user_7_test_1769953572.883317_conv"
+          }
+        },
+        {
+          "message": "我想了解人工智能",
+          "success": true,
+          "response": {
+            "response": "您好！很高兴为您介绍人工智能（AI）这个领域。以下是一个系统性的概述，涵盖基本概念、核心分支、应用场景和未来趋势，帮助您快速建立认知框架。\n\n---\n\n### **一、人工智能是什么？**\n人工智能是计算机科学的一个分支，旨在开发能够模拟人类智能的系统和机器，包括：\n- **学习能力**（从数据中提取规律）\n- **推理能力**（根据规则得出结论）\n- **感知能力**（识别图像、声音等）\n- **决策能力**（在复杂环境中做出选择）\n\n---\n\n### **二、核心技术分支**\n1. **机器学习（ML）**  \n   AI的核心实现方式，让机器通过数据自动改进性能，无需显式编程。\n   - **监督学习**：用标注数据训练模型（如垃圾邮件识别）。\n   - **无监督学习**：发现未标注数据的模式（如客户分群）。\n   - **强化学习**：通过试错优化决策（如AlphaGo）。\n\n2. **深度学习**  \n   机器学习的分支，使用多层神经网络处理复杂任务，在图像、语音、自然语言处理中表现突出。\n   - **卷积神经网络（CNN）**：图像识别、医疗影像分析。\n   - **循环神经网络（RNN）**：时间序列数据（如语音、文本生成）。\n\n3. **自然语言处理（NLP）**  \n   让机器理解、生成人类语言，应用包括：\n   - 智能助手（Siri、ChatGPT）\n   - 机器翻译、情感分析\n\n4. **计算机视觉**  \n   让机器“看懂”图像和视频，应用于：\n   - 人脸识别、自动驾驶\n   - 工业质检、AR/VR\n\n---\n\n### **三、实际应用场景**\n- **日常生活**：个性化推荐（抖音、淘宝）、智能家居、导航软件。\n- **医疗健康**：辅助诊断、药物研发、健康监测设备。\n- **金融科技**：欺诈检测、量化交易、智能客服。\n- **工业制造**：预测性维护、机器人流程自动化（RPA）。\n- **创意领域**：AI绘画（Midjourney）、音乐生成、写作辅助。\n\n---\n\n### **四、当前趋势与挑战**\n- **大模型与通用人工智能（AGI）**：  \n  如GPT-4等大型语言模型推动AI向多任务、泛化能力发展，但距离真正的“人类水平智能”仍有差距。\n- **伦理与治理**：  \n  数据隐私、算法偏见、就业冲击等问题引发全球关注，欧盟《AI法案》等规范陆续出台。\n- **AI民主化**：  \n  低代码平台和开源工具（如TensorFlow、Hugging Face）降低AI使用门槛。\n\n---\n\n### **五、学习建议**\n若想深入探索，可循序渐进：\n1. **基础理论**：数学（线性代数、概率论）、编程（Python）。\n2. **实践入门**：Kaggle竞赛、在线课程（吴恩达《机器学习》）。\n3. **垂直深耕**：选择细分领域（如自动驾驶、医疗AI）结合行业知识。\n\n---\n\n### **六、常见误区澄清**\n- **AI ≠ 万能**：当前AI依赖数据和质量，在创造性和复杂逻辑任务中仍有局限。\n- **AI 不会完全取代人类**：更可能成为“增强智能”，辅助人类决策。\n\n---\n\n如果需要更具体的领域介绍（如技术原理、行业案例、学习资源），欢迎随时提问！ 😊",
+            "session_id": "test_user_7_test_1769953572.883317",
+            "conversation_id": "test_user_7_test_1769953572.883317_conv"
+          }
+        },
+        {
+          "message": "人工智能有哪些应用？",
+          "success": true,
+          "response": {
+            "response": "人工智能的应用非常广泛，几乎渗透到各行各业。以下是一些主要领域的应用示例：\n\n---\n\n### **1. 日常生活与消费**\n- **智能助手**  \n  Siri、Alexa、小爱同学等语音助手，通过自然语言处理（NLP）提供信息查询、日程管理等功能。\n- **推荐系统**  \n  电商（如亚马逊、淘宝）、视频平台（如Netflix、抖音）根据用户行为推荐商品或内容。\n- **智能家居**  \n  自动调节灯光、温度、安全监控（如人脸识别门锁）。\n\n---\n\n### **2. 医疗健康**\n- **疾病诊断**  \n  医学影像分析（如CT、MRI图像识别），辅助早期发现癌症、眼科疾病等。\n- **药物研发**  \n  加速新药筛选与分子设计（如AlphaFold预测蛋白质结构）。\n- **健康管理**  \n  可穿戴设备监测心率、睡眠，AI提供个性化健康建议。\n\n---\n\n### **3. 交通与自动驾驶**\n- **自动驾驶汽车**  \n  特斯拉、Waymo等公司利用计算机视觉和传感器融合实现环境感知与决策。\n- **交通优化**  \n  智能信号灯调控、实时路线规划（如高德、谷歌地图）。\n\n---\n\n### **4. 金融科技**\n- **风控与欺诈检测**  \n  分析交易模式，实时识别异常行为（如信用卡盗刷）。\n- **智能投顾**  \n  自动化投资建议与资产配置（如Betterment、蚂蚁财富）。\n- **信用评估**  \n  通过多维度数据（非传统征信）评估借款人风险。\n\n---\n\n### **5. 教育**\n- **个性化学习**  \n  自适应学习平台（如Khan Academy、科大讯飞）根据学生进度调整内容。\n- **自动批改**  \n  作文、编程作业的AI评分与反馈。\n\n---\n\n### **6. 工业与制造**\n- **预测性维护**  \n  通过传感器数据分析，提前预警设备故障。\n- **智能制造**  \n  机器人协作、视觉检测产品质量（如富士康工厂）。\n\n---\n\n### **7. 内容创作**\n- **AIGC（生成式AI）**  \n  文本生成（ChatGPT）、图像生成（MidJourney）、视频生成（Sora）、音乐创作。\n- **媒体辅助**  \n  自动字幕生成、语音合成（如配音工具）。\n\n---\n\n### **8. 安全与安防**\n- **人脸识别**  \n  公共场所监控、手机解锁、身份验证。\n- **网络安全**  \n  AI分析网络流量，检测黑客攻击或恶意软件。\n\n---\n\n### **9. 农业与环境**\n- **精准农业**  \n  无人机监测作物生长，AI分析土壤数据优化灌溉与施肥。\n- **环境保护**  \n  气候预测、野生动物保护（如通过图像识别追踪濒危物种）。\n\n---\n\n### **10. 科学研究**\n- **数据分析与模拟**  \n  天文数据分析（如发现系外行星）、粒子物理实验（如CERN数据处理）。\n- **语言与文化遗产**  \n  AI翻译古籍、修复破损文物或壁画。\n\n---\n\n### **未来趋势**\n- **通用人工智能（AGI）**：迈向更接近人类思维的AI系统。\n- **人机融合**：脑机接口（如Neuralink）、AI增强人类决策。\n- **伦理与治理**：应对AI偏见、隐私保护、就业冲击等挑战。\n\n---\n\n人工智能仍在快速发展，其应用场景将持续扩展，深刻改变社会生产与生活方式。如果有特定领域想深入了解，可以告诉我！",
+            "session_id": "test_user_7_test_1769953572.883317",
+            "conversation_id": "test_user_7_test_1769953572.883317_conv"
+          }
+        },
+        {
+          "message": "谢谢你的解释",
+          "success": true,
+          "response": {
+            "response": "不客气！很高兴能帮到您。如果您还有其他问题或需要进一步的解释，随时告诉我，我会尽力为您提供帮助！😊",
+            "session_id": "test_user_7_test_1769953572.883317",
+            "conversation_id": "test_user_7_test_1769953572.883317_conv"
+          }
+        }
+      ],
+      "comparison": {
+        "total_messages": 4,
+        "server_success_count": 4,
+        "skills_success_count": 4,
+        "summary": "两个服务在所有消息上都成功响应"
+      }
+    }
+  ],
+  "summary": {
+    "total_tests": 7,
+    "server_success_count": 7,
+    "skills_success_count": 7,
+    "server_success_rate": "100.0%",
+    "skills_success_rate": "100.0%",
+    "conclusion": "Daisy Skills 对话能力未退化"
+  }
+}

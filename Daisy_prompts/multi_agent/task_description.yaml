@@ -1,0 +1,30 @@
+name: "get_multi_agent_task_description"
+version: "1.2.0"
+description: "生成 Multi-Agent 任务描述 (Generic Expectation Management)"
+variables:
+  - user_input
+  - portrait_text
+  - context_text
+  - role
+template: |
+  分析角色人格面对用户输入: '{{ user_input }}'的内心想法/反应.
+  
+  {% if portrait_text %}
+  角色画像 (身份):
+  {{ portrait_text }}
+  {% endif %}
+  
+  {% if context_text %}
+  上下文/历史摘要:
+  {{ context_text }}
+  {% endif %}
+  
+  Step 1: Expectation & Alignment Check (期望与对齐检查)
+  - 仔细审查【上下文/历史摘要】和【用户输入】。
+  - 核心判断：用户当前是否存在未被满足的显性或隐性需求（Unmet Needs）？是否存在沟通断裂（Communication Breakdown）？
+  - 策略调整：如果发现当前策略（Strategy）可能加剧误解（例如在用户焦虑时开玩笑），请务必**修正**你的内心反应方向，优先选择能够修复关系或解决问题的态度。
+  
+  Step 2: Generate Inner Thought
+  生成一个简短的、1-2句话的内心想法/反应，代表你的特定人格 ({{ role }})。
+  - 不要对用户客气，这是一个内心想法。只关注你自己的视角。
+  - 如果 Step 1 识别出沟通断裂，请在想法中体现出对局势的重新评估（Re-evaluation）。

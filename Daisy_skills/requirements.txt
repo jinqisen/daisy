@@ -1,0 +1,15 @@
+mcp
+fastapi
+uvicorn
+langchain
+langchain-openai
+python-dotenv
+structlog
+pydantic-settings
+aiohttp
+sqlalchemy
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart
+redis
+arq

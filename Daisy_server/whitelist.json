@@ -1,0 +1,73 @@
+{
+    "users": [
+        "verify_user",
+        "test_user",
+        {
+            "username": "jinqisen",
+            "gender": "male"
+        },
+        {
+            "username": "luyi",
+            "gender": "male"
+        },
+        {
+            "username": "jiangyu",
+            "gender": "male"
+        },
+        {
+            "username": "zhouyifan",
+            "gender": "male"
+        },
+        {
+            "username": "zengruilue",
+            "gender": "male"
+        },
+        {
+            "username": "zhuziwei",
+            "gender": "male"
+        },
+        {
+            "username": "gusidun",
+            "gender": "male"
+        },
+        {
+            "username": "luopeng",
+            "gender": "male"
+        },
+        {
+            "username": "mougaoyu",
+            "gender": "male"
+        },
+        {
+            "username": "yanke",
+            "gender": "male"
+        },
+        {
+            "username": "ruby",
+            "gender": "female"
+        },
+        {
+            "username": "wulinlin",
+            "gender": "male"
+        },
+        {
+            "username": "zhuzhengkai",
+            "gender": "male"
+        },
+        {
+            "username": "tancaixia",
+            "gender": "female"
+        },
+        {
+            "username": "yufang",
+            "gender": "female"
+        },
+        {
+            "username": "test",
+            "gender": "female"
+        }
+    ],
+    "admins": [
+        "jinqisen"
+    ]
+}

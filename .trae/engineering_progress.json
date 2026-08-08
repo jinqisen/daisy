@@ -1,0 +1,23 @@
+{
+  "task": "Daisy_server 剩余整改：路由缓存纳入 session、STANDARD 按 session 构造上下文、收紧 trace/state_snapshot",
+  "status": "completed",
+  "updated_at": "2026-07-18T01:22:00Z",
+  "steps": [
+    {
+      "name": "梳理路由缓存、STANDARD 上下文与 trace/state_snapshot 现状",
+      "status": "completed"
+    },
+    {
+      "name": "实现 session 级路由缓存键与 STANDARD session 上下文/摘要缓存读取",
+      "status": "completed"
+    },
+    {
+      "name": "收紧 trace/state_snapshot 落盘字段并补充测试",
+      "status": "completed"
+    },
+    {
+      "name": "执行自检并汇总结果",
+      "status": "completed"
+    }
+  ]
+}

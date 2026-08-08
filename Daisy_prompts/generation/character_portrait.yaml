@@ -1,0 +1,24 @@
+name: "get_character_portrait_prompt"
+version: "1.0.0"
+description: "生成用于合成角色画像的 Prompt"
+variables:
+  - common
+template: |
+  基于以下原始信息合成一个"角色画像"。
+  
+  **原始信息**:
+  姓名: {{ common.name }}
+  性别: {{ common.gender }}
+  年龄: {{ common.age }}
+  职业: {{ common.occupation }}
+  世界设定: {{ common.world_setting }}
+  背景故事: {{ common.backstory }}
+  
+  **目标**:
+  创建一个简洁、整合的段落（约100-150字），捕捉角色的本质。
+  将事实（年龄、工作、学校）与背景故事中提到的个性特征和矛盾融合在一起。
+  
+  **示例输出风格**:
+  "静雯是一位24岁的心理学家，生活在2025年的武汉。她将小镇出身的温柔与顶尖医学院的学术严谨相结合..."
+  
+  用中文输出角色画像。

@@ -1,0 +1,32 @@
+# Dockerfile.base
+# 基础镜像：包含系统依赖、Python环境和模型文件
+# 这个镜像构建一次后，除非模型或依赖变更，否则不需要重新构建
+
+FROM hub.rat.dev/library/python:3.10-slim
+
+# Ensure UTF-8 encoding
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
+WORKDIR /app
+
+# 1. 系统依赖
+# RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources \
+#     && apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Python 依赖
+ENV PIP_CACHE_DIR=/app/pip-cache
+COPY requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
+    pip install --no-cache-dir --default-timeout=2000 --retries 20 -i http://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com torch && \
+    pip install --default-timeout=2000 --retries 20 -i http://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com -r requirements.txt
+
+# 3. 模型文件 (使用本地挂载，不再构建时下载)
+# ENV TARGET_MODEL_DIR=/app/model
+# COPY download_model.py .
+# RUN python download_model.py

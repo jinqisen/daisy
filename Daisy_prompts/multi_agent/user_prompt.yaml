@@ -1,0 +1,17 @@
+name: "get_multi_agent_user_prompt"
+version: "1.0.0"
+description: "Multi-Agent 用户输入提示词"
+variables:
+  - task_description
+template: |
+  {{ task_description }}
+
+  **输出要求**:
+  请按以下格式输出你的思考结果（严格遵守此结构）：
+
+  [Strategy]: (从策略库中选择一个最合适的策略枚举值，例如 Empathetic_Support)
+  [Rubric_Check]:
+  - Style Consistency: (检查你的语气是否符合人设，如果不符合，说明如何修正)
+  - Emotional Intelligence: (检查你是否捕捉到了用户情绪)
+  - Immersion: (检查是否有AI味)
+  [Thought]: (基于上述检查，生成你最终的内心独白和应对思路。这部分将被用于指导回复生成)

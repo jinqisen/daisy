@@ -1,0 +1,9 @@
+name: "get_translation_prompt"
+version: "1.0.0"
+description: "生成用于文本翻译的 Prompt"
+variables:
+  - text
+template: |
+  将以下文本翻译成英文用于情感分析。输出英文翻译，确保翻译保留原始情感和含义，不要解释。
+  
+  文本: {{ text }}

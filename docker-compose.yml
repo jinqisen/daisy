@@ -1,0 +1,135 @@
+services:
+  daisy_server:
+    build:
+      context: ./Daisy_server
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: daisy_server:base
+    image: daisy_server:latest
+    container_name: daisy_server
+    restart: always
+    ports:
+      - "30021:30021"
+    volumes:
+      - ./Daisy_prompts:/app/Daisy_prompts
+      - ./Daisy_server/.env:/app/Daisy_server/.env
+      - ./Daisy_server/.env.local:/app/Daisy_server/.env.local
+      # Code volumes commented out for production deployment to ensure image immutability
+      # Uncomment for development to enable hot-reloading
+      - ./Daisy_server:/app/Daisy_server
+    env_file:
+      - ./Daisy_server/.env
+      - ./Daisy_server/.env.local
+    environment:
+      - DAISY_PROMPTS_DIR=/app/Daisy_prompts
+      - HOST=0.0.0.0
+      - PORT=30021
+      # Override paths for Docker environment
+      # Use mounted volume path for model
+      - EMOTION_MODEL_NAME=/app/Daisy_server/model/bert-base-cased-goemotions-original
+      # Connect to services in the same network
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - daisy_network
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:30021/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  daisy_worker:
+    build:
+      context: ./Daisy_server
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: daisy_server:base
+    image: daisy_server:latest
+    container_name: daisy_worker
+    restart: always
+    command: /app/run_worker.sh
+    volumes:
+      - ./Daisy_prompts:/app/Daisy_prompts
+      - ./Daisy_server/.env:/app/Daisy_server/.env
+      - ./Daisy_server/.env.local:/app/Daisy_server/.env.local
+      - ./Daisy_server:/app/Daisy_server
+    env_file:
+      - ./Daisy_server/.env
+      - ./Daisy_server/.env.local
+    environment:
+      - DAISY_PROMPTS_DIR=/app/Daisy_prompts
+      - EMOTION_MODEL_NAME=/app/Daisy_server/model/bert-base-cased-goemotions-original
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - daisy_network
+    depends_on:
+      daisy_server:
+        condition: service_healthy
+
+  daisy_front:
+    build:
+      context: ./Daisy_front
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    image: daisy_front:latest
+    container_name: daisy_front
+    restart: always
+    env_file:
+      - ./Daisy_front/.env
+      - ./Daisy_front/.env.local
+    ports:
+      - "10000:80"
+    networks:
+      - daisy_network
+    depends_on:
+      daisy_server:
+        condition: service_healthy
+
+  redis:
+    image: redis:alpine
+    container_name: daisy_redis
+    restart: always
+    ports:
+      - "30018:6379"
+    networks:
+      - daisy_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: daisy_qdrant
+    restart: always
+    ports:
+      - "30019:6333"
+    networks:
+      - daisy_network
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/6333'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  daisy_network:
+    driver: bridge

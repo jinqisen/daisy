@@ -1,0 +1,61 @@
+{
+  "name": "daisy-desktop",
+  "version": "0.1.0",
+  "description": "Daisy AI Companion - Desktop",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.daisy.companion",
+    "productName": "Daisy",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js"
+    ],
+    "extraResources": [
+      {
+        "from": "../packaging/dist/daisy_backend",
+        "to": "daisy_backend"
+      }
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.lifestyle"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

@@ -1,0 +1,10 @@
+node_modules
+.env
+.env.*
+image
+scripts
+.git
+.DS_Store
+._*
+**/._*
+docs
