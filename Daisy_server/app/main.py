@@ -51,6 +51,10 @@ async def lifespan(app: FastAPI):
     from .services.system.trace_store import install as install_trace_store
     install_trace_store()
 
+    # 指标事件落库(同样的注入模式,见 core/metrics_sink.py)
+    from .services.system.metrics_store import install as install_metrics_store
+    install_metrics_store()
+
     init_db()
     db = SessionLocal()
     init_personality_data(db)

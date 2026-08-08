@@ -1,6 +1,35 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy import Column, Float, Integer, String, Text, DateTime
 from sqlalchemy.sql import func
+from ..core.time_utils import utc_now_naive
 from .base import Base
+
+
+class MetricEventDB(Base):
+    """
+    指标事件的事实表(SLO 面板的真源)。
+
+    这些量原先只累加在 Redis 里且**不带 TTL**。嵌入模式的 Redis 是进程内
+    fakeredis,重启即空,于是累计量(总调用数/总 token/总成本)每次重启归零 ——
+    面板永远只反映"本次运行",成本统计基本没有意义。
+
+    一行 = 一个事件,聚合放到读取侧做。这样也顺带解决了原先"计数器与事实
+    不一致"的隐患:没有计数器,只有事实。
+    """
+
+    __tablename__ = "metric_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    # 与库中其余时间字段一致:naive UTC(见 core/time_utils)
+    timestamp = Column(DateTime, default=utc_now_naive, index=True)
+
+    kind = Column(String(16), nullable=False, index=True)  # llm / router / e2e
+    route = Column(String(32), nullable=True)              # FAST / STANDARD / DEEP
+    model_name = Column(String(128), nullable=True)
+
+    duration_ms = Column(Integer, nullable=True)   # router / e2e
+    in_tokens = Column(Integer, nullable=True)     # llm
+    out_tokens = Column(Integer, nullable=True)    # llm
+    cost_usd = Column(Float, nullable=True)        # llm
 
 class LLMTraceDB(Base):
     """

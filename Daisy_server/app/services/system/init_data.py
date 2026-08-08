@@ -6,6 +6,11 @@ from app.models import RoleProfileDB, CommonSettingsDB
 from app.prompts import RoleProfile, CommonSettings
 import os
 import json
+
+# Provider 配置在 Redis 里是**缓存**,真源是 server_config.json ——
+# 读取侧未命中时会回落到文件并回填(见 core/llm.py 的自愈逻辑)。
+# 有 TTL 才符合"Redis 只做缓存、丢了能重建"这条收敛后的规则。
+PROVIDER_CACHE_TTL = 24 * 3600
 import structlog
 from app.core.redis import redis_client
 from app.core.llm_config import llm_config_manager
@@ -74,16 +79,21 @@ async def load_llm_providers_to_redis():
             # 2. 构建 Redis Key 并存入 Redis
             redis_key = f"system:llm:provider:{key}"
             if redis_client.enabled:
-                await redis_client.set(redis_key, json.dumps(config), ttl=None) # 不过期
+                # 这是**缓存**:真源是 server_config.json,读取侧(api/routers/config.py、
+                # core/llm.py)在未命中时会回落到文件并自愈,所以可以安全过期。
+                # 原先 ttl=None 让它变成了"存在内存里的长期数据",而嵌入模式下
+                # 内存 Redis 重启即空 —— 既没有持久性,又绕过了"缓存必须能重建"的约束。
+                await redis_client.set(redis_key, json.dumps(config), ttl=PROVIDER_CACHE_TTL)
             
             logger.info(f"Loaded LLM provider config: {key}")
 
         # 设置默认 Provider
         default_provider = settings.DEFAULT_LLM_PROVIDER
         if default_provider:
+            # 真源是 settings.DEFAULT_LLM_PROVIDER(来自 server_config.json,持久)。
+            # 原先还往 Redis 写一份 system:llm:current_provider —— 全库**只写不读**,
+            # 是纯粹的死数据,删掉。
             llm_config_manager.set_current_provider(default_provider)
-            if redis_client.enabled:
-                await redis_client.set("system:llm:current_provider", default_provider)
             
         # 让依赖 provider 的缓存实例失效。
         # MemoryService 由 @lru_cache 构造,provider 在首次构造时就定死了 ——

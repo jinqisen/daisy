@@ -8,7 +8,6 @@ from ...core.llm import get_llm_service
 from ...services.memory.store import get_memory_service
 from ...core.constants import MEMORY_SEARCH_MIN_WORDS, MEMORY_SEARCH_MIN_CHARS, RL_STATE_DIM
 from ...core.redis import redis_client
-from ...core.metrics import bucket_label, E2E_HIST_THRESHOLDS_MS
 from ...services.memory.chat_history import history_service
 from .state import AgentState
 from .tools import add_trace, get_common_settings_async, monitor_execution_time, sanitize_trace_payload
@@ -267,15 +266,11 @@ async def save_memory_and_log(state: AgentState) -> AgentState:
             duration_ms = int((time.time() - start_ts) * 1000)
             route = state.get("route", "UNKNOWN")
             logger.info("SLO_E2E_LATENCY", duration_ms=duration_ms, route=route)
-            try:
-                if redis_client.enabled and redis_client.redis:
-                    await redis_client.redis.incr("metrics:e2e:count")
-                    await redis_client.redis.incrby("metrics:e2e:sum_ms", duration_ms)
-                    await redis_client.redis.hincrby("metrics:e2e:by_route", route, 1)
-                    await redis_client.redis.hincrby("metrics:e2e:hist", bucket_label(duration_ms, E2E_HIST_THRESHOLDS_MS), 1)
-            except Exception:
-                pass
-        
+            # 落库而不是累加 Redis 计数器(重启即空,见 core/metrics_sink 说明)
+            from ...core.metrics_sink import KIND_E2E, record_metric
+            record_metric(kind=KIND_E2E, route=route, duration_ms=duration_ms)
+
+
         return {"workflow_trace": trace, **(saved_ids or {})}
     except Exception as e:
         logger.error(f"Error in save_memory_and_log: {e}")

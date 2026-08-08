@@ -19,8 +19,8 @@ from .nodes import (
 )
 from ..services.dialogue.router import IntelligentRouter
 from ..core.smart_cache import cache_node
-from ..core.redis import redis_client
-from ..core.metrics import bucket_label, ROUTER_HIST_THRESHOLDS_MS
+# 指标改为落库(见 core/metrics_sink.py),这里不再需要 Redis 与直方图分桶 ——
+# 分桶统一挪到读取侧,避免写入侧和读取侧各持一套阈值而悄悄漂移。
 import hashlib
 import time
 
@@ -86,14 +86,10 @@ async def route_logic(state: AgentState):
         decision = await router.route(state)
     state["route"] = decision
     duration_ms = int((time.time() - start_ts) * 1000)
-    try:
-        if redis_client.enabled and redis_client.redis:
-            await redis_client.redis.incr("metrics:router:count")
-            await redis_client.redis.incrby("metrics:router:sum_ms", duration_ms)
-            await redis_client.redis.hincrby("metrics:router:by_route", decision, 1)
-            await redis_client.redis.hincrby("metrics:router:hist", bucket_label(duration_ms, ROUTER_HIST_THRESHOLDS_MS), 1)
-    except Exception:
-        pass
+    # 落库而不是累加 Redis 计数器 —— 后者在嵌入模式下重启即空,
+    # SLO 面板永远只反映本次运行。直方图的分桶挪到读取侧统一做。
+    from ..core.metrics_sink import KIND_ROUTER, record_metric
+    record_metric(kind=KIND_ROUTER, route=decision, duration_ms=duration_ms)
     return decision
 
 def should_continue_generation(state: AgentState) -> str:

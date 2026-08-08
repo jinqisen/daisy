@@ -361,7 +361,11 @@ class Settings(BaseSettings):
     DEFAULT_CHARACTER_CARD_PATH: str = Field("./Daisy_server/assets/character_cards/default_character_card.json")
 
     # 存储
-    VECTOR_DB_PATH: str = Field("./chroma_db")
+    # 这是 **Qdrant** 的本地数据目录(未设置 QDRANT_HOST 时使用)。
+    # 默认值原先叫 ./chroma_db —— 早期用过 Chroma 的残留,名字与实际用途不符,
+    # 排查向量库问题时会把人引到错误的方向。项目中已无 Chroma(依赖里也没有)。
+    # 嵌入模式下由 sidecar 覆盖为 <数据目录>/qdrant_embedded,故此默认值只影响本地开发。
+    VECTOR_DB_PATH: str = Field("./qdrant_db")
     QDRANT_HOST: Optional[str] = Field(None)
     QDRANT_PORT: int = Field(6333)
     

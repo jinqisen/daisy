@@ -129,19 +129,19 @@ class LLMService:
                 return
             in_tokens = estimate_tokens(prompt_text, settings.TOKEN_EST_CHARS_PER_TOKEN)
             out_tokens = estimate_tokens(completion_text, settings.TOKEN_EST_CHARS_PER_TOKEN)
-            await redis_client.redis.incr("metrics:llm:count")
-            await redis_client.redis.incrby("metrics:llm:sum_in_tokens", in_tokens)
-            await redis_client.redis.incrby("metrics:llm:sum_out_tokens", out_tokens)
-            await redis_client.redis.hincrby("metrics:llm:by_route", route or "UNKNOWN", 1)
-            if model_name:
-                await redis_client.redis.hincrby("metrics:llm:by_model", model_name, 1)
             cost = 0.0
             if settings.EST_COST_PER_1K_INPUT_USD is not None or settings.EST_COST_PER_1K_OUTPUT_USD is not None:
                 if settings.EST_COST_PER_1K_INPUT_USD is not None:
                     cost += (in_tokens / 1000.0) * float(settings.EST_COST_PER_1K_INPUT_USD)
                 if settings.EST_COST_PER_1K_OUTPUT_USD is not None:
                     cost += (out_tokens / 1000.0) * float(settings.EST_COST_PER_1K_OUTPUT_USD)
-                await redis_client.redis.incrbyfloat("metrics:llm:sum_cost_usd", cost)
+
+            # 落库而不是累加 Redis 计数器:这些是**累计量**,而嵌入模式的 Redis
+            # 重启即空 —— 原先每次重启总调用数/总成本归零,面板只反映本次运行。
+            from .metrics_sink import KIND_LLM, record_metric
+            record_metric(kind=KIND_LLM, route=route or "UNKNOWN",
+                          model_name=model_name or None,
+                          in_tokens=in_tokens, out_tokens=out_tokens, cost_usd=cost)
             # 工作流级账本(core/budget.py):按 execution_id 累计,供预算控制点消费
             from ..core.budget import record_llm_usage
             await record_llm_usage(execution_id, in_tokens, out_tokens, cost)
