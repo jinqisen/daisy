@@ -17,17 +17,14 @@ logger = structlog.get_logger()
 # 外部 Redis 的连接超时。默认(75s)会让配错地址表现为"启动卡住"而非报错。
 REDIS_CONNECT_TIMEOUT_SEC = 5
 
-# 嵌入模式下同步/异步 fakeredis 共享同一个内存服务器,保证跨 client 数据一致
-# (例如 SSE 发布订阅、缓存、指标计数必须落在同一份内存上)。
-_FAKE_SERVER = None
-
-
-def _get_fake_server():
-    global _FAKE_SERVER
-    if _FAKE_SERVER is None:
-        import fakeredis
-        _FAKE_SERVER = fakeredis.FakeServer()
-    return _FAKE_SERVER
+# 嵌入模式下不再使用 fakeredis,改为进程内实现(见 core/local_kv.py)。
+# 同步与异步门面共享同一份数据,保证 SSE 广播、缓存看到一致的状态。
+#
+# 换掉 fakeredis 的理由:全部调用点里 33/48 是 get/set/delete,剩下是
+# 1 次 publish、1 次 pipeline、1 次 keys、1 次 hgetall —— 我们在跑一个
+# 网络缓存的仿真器来做字典的事。除了多一个依赖,它还制造了一个更贵的错觉:
+# "它看起来像数据库,所以可以往里放长期数据" —— 而它重启即空,
+# 主动关心的配额/冷却/作息和 SLO 指标都栽在这上面。
 
 class SyncRedisClient:
     """
@@ -48,12 +45,10 @@ class SyncRedisClient:
     def connect(self):
         try:
             if settings.EMBEDDED_MODE:
-                import fakeredis
-                self.redis = fakeredis.FakeStrictRedis(
-                    server=_get_fake_server(), decode_responses=True
-                )
+                from .local_kv import LocalKVSync
+                self.redis = LocalKVSync()
                 self.enabled = True
-                logger.info("Sync Redis (embedded fakeredis) ready.")
+                logger.info("同步缓存就绪(进程内实现)。")
                 return
             self.redis = sync_redis.from_url(
                 f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}",
@@ -139,13 +134,11 @@ class RedisClient:
         """
         try:
             if settings.EMBEDDED_MODE:
-                import fakeredis.aioredis
-                self.redis = fakeredis.aioredis.FakeRedis(
-                    server=_get_fake_server(), decode_responses=True
-                )
+                from .local_kv import LocalKVAsync
+                self.redis = LocalKVAsync()
                 await self.redis.ping()
                 self.enabled = True
-                logger.info("Async Redis (embedded fakeredis) ready.")
+                logger.info("缓存就绪(进程内实现,重启即清空 —— 只放缓存)。")
                 return
             self.redis = redis.from_url(
                 f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}",
@@ -168,7 +161,7 @@ class RedisClient:
             logger.error(
                 f"连接 Redis 失败({settings.REDIS_HOST}:{settings.REDIS_PORT}):{e}。"
                 f"若在本机开发/单机运行,应设 EMBEDDED_MODE=true —— "
-                f"嵌入模式用进程内 fakeredis,不需要任何外部服务。"
+                f"嵌入模式用进程内缓存,不需要任何外部服务。"
             )
             self.enabled = False
 

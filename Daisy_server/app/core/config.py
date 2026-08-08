@@ -337,7 +337,7 @@ class Settings(BaseSettings):
     # 形同虚设:原先内层沿用通用 60s 且重试 1 次 = 122s 才失败,已超过外层 90s。
     DEEP_CARD_LLM_TIMEOUT_SEC: int = Field(120)
 
-    # 单进程嵌入模式(本地 C 端桌面 App):Redis 用进程内 fakeredis、Qdrant 走本地路径、
+    # 单进程嵌入模式(本地 C 端桌面 App):缓存用进程内实现、Qdrant 走本地路径、
     # ARQ worker 并入后端(chat 走进程内异步任务,不再需要独立 worker 与消息 broker)。
     # 关闭时为标准 server 部署形态(真实 Redis + 独立 worker),行为不变。
     EMBEDDED_MODE: bool = Field(False)
@@ -432,7 +432,7 @@ class Settings(BaseSettings):
         # 必须在此覆盖——.env 里可能设了远程 QDRANT_HOST/REDIS_HOST,会盖过环境变量。
         if self.EMBEDDED_MODE:
             self.QDRANT_HOST = None  # memory 服务据此改用本地嵌入 Qdrant 路径
-            self.REDIS_HOST = "embedded"  # 仅占位;实际连接由 fakeredis 接管
+            self.REDIS_HOST = "embedded"  # 仅占位;实际由进程内缓存接管(core/local_kv.py)
 
     def get_redis_settings(self):
         """

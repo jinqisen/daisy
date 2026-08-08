@@ -10,7 +10,7 @@ class SchedulerManager:
     
     def __init__(self):
         self.scheduler: Optional[BackgroundScheduler] = None
-        # 嵌入模式下派发任务必须回到主事件循环:fakeredis / Qdrant 等进程内组件
+        # 嵌入模式下派发任务必须回到主事件循环:进程内缓存 / Qdrant 等组件
         # 的内部结构绑定在创建它们的循环上,在 APScheduler 线程里新开一个循环去碰
         # 会报 "bound to a different event loop"。start() 由 lifespan 调用,
         # 此时正处于主循环中,故在那里把循环记下来。

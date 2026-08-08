@@ -76,7 +76,9 @@ hiddenimports = []
 for pkg in [
     "torch", "transformers", "sentence_transformers", "tokenizers",
     "qdrant_client", "mem0", "litellm", "langchain", "langchain_core",
-    "langchain_openai", "langgraph", "fakeredis", "tiktoken", "tiktoken_ext",
+    # fakeredis 已移除:嵌入模式改用进程内缓存(core/local_kv.py),
+    # 全库不再有任何 import。留着只会让安装包多带一个用不到的依赖。
+    "langchain_openai", "langgraph", "tiktoken", "tiktoken_ext",
     "arq", "structlog", "passlib", "jose", "apscheduler", "jieba",
     "sqlalchemy", "pydantic", "pydantic_settings",
     # 角色卡等结构化输出的 JSON 容错解析(见 core/json_utils.py)
