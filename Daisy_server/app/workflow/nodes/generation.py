@@ -104,20 +104,32 @@ async def generate_response(state: AgentState) -> AgentState:
         retrieved_memories = state.get("retrieved_memories", [])
         tool_results = state.get("tool_results", {})
 
-        # 1.1 获取 Redis 情感状态 (NEW)
+        # 1.1 当前情感状态 —— 取自本轮 analyze 节点的真实分析结果
+        #
+        # 原实现读 Redis 的 `user:{uid}:emotional_state`,而**全库没有任何地方写过这个键**
+        # (set_emotional_state 只在 get 内部的衰减回写里被调用,那要求键已存在)。
+        # 于是 get 永远返回默认对象 EmotionalState(),而 pydantic 模型**恒为真**,
+        # `if emotional_obj:` 拦不住 —— 结果每一次生成都往提示词里注入
+        #     当前情感状态 (Redis): Neutral (强度: 0)
+        # 哪怕用户刚说完宠物去世。对一个以情绪陪伴为核心的产品,这不是"少了个功能",
+        # 而是**持续给模型一个与事实相反的信号**,且完全静默、日志正常。
+        #
+        # 真实情绪本来就在图状态里(analyze 节点用 GoEmotions 算出 top_emotions),
+        # 直接用它,不必绕一趟从来没被写入过的缓存。
         user_id = state["user_id"]
         emotional_state_data = None
         try:
-            # Assuming redis_client is imported from ...core.redis
-            emotional_obj = await redis_client.get_emotional_state(user_id)
-            if emotional_obj:
+            top = state.get("top_emotions") or []
+            if top:
+                label, score = top[0][0], float(top[0][1])
                 emotional_state_data = {
-                    "current_mood": emotional_obj.current_mood,
-                    "intensity": emotional_obj.intensity
+                    "current_mood": label,
+                    "intensity": int(max(0.0, min(1.0, score)) * 100),
                 }
-                logger.info("Loaded emotional state from Redis", mood=emotional_state_data["current_mood"])
+                logger.info("当前情感状态", mood=label,
+                            intensity=emotional_state_data["intensity"])
         except Exception as e:
-            logger.warning(f"Failed to load emotional state: {e}")
+            logger.warning(f"读取情感状态失败: {e}")
 
         # 2. 获取 Common Settings
         # 优化：从 State 获取 Common Settings

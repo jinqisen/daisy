@@ -58,11 +58,22 @@ class TestRedisFailsFastWithReadableReason:
         assert 0 < REDIS_CONNECT_TIMEOUT_SEC <= 10, \
             f"连接超时 {REDIS_CONNECT_TIMEOUT_SEC}s 过长,启动会长时间无响应"
 
-    def test_both_clients_set_timeout(self):
-        """同步与异步两个客户端都要设 —— 漏一个就仍会卡住。"""
+    def test_every_client_sets_timeout(self):
+        """
+        **每一个**真实 Redis 客户端都要设超时,漏一个就仍会卡住。
+
+        原先写死"至少 2 个",因为当时有同步/异步两个客户端。后来同步客户端被删了
+        (全库零使用者),这条断言就变成了在测**客户端数量**而不是它要守的性质。
+        改成按实际的 from_url 调用数校验,以后增删客户端都不会误报或漏报。
+        """
         src = open(os.path.join(SERVER, "app", "core", "redis.py"), encoding="utf-8").read()
-        assert src.count("socket_connect_timeout=REDIS_CONNECT_TIMEOUT_SEC") >= 2, \
-            "只有一个 Redis 客户端设了连接超时,另一个仍会走 75 秒默认值"
+        clients = src.count("from_url(")
+        timeouts = src.count("socket_connect_timeout=REDIS_CONNECT_TIMEOUT_SEC")
+        assert clients > 0, "没有找到任何 Redis 客户端构造点,这条测试已失效"
+        assert timeouts >= clients, (
+            f"{clients} 个 Redis 客户端里只有 {timeouts} 个设了连接超时,"
+            f"其余会走 75 秒默认值,表现为启动卡住"
+        )
 
     def test_error_message_points_at_embedded_mode(self):
         """

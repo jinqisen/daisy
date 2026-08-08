@@ -26,91 +26,12 @@ REDIS_CONNECT_TIMEOUT_SEC = 5
 # "它看起来像数据库,所以可以往里放长期数据" —— 而它重启即空,
 # 主动关心的配额/冷却/作息和 SLO 指标都栽在这上面。
 
-class SyncRedisClient:
-    """
-    Synchronous Redis client for use in synchronous contexts (e.g. LLMService).
-    """
-    _instance = None
-
-    def __init__(self):
-        self.redis: Optional[sync_redis.Redis] = None
-        self.enabled = False
-
-    @classmethod
-    def get_instance(cls):
-        if cls._instance is None:
-            cls._instance = SyncRedisClient()
-        return cls._instance
-
-    def connect(self):
-        try:
-            if settings.EMBEDDED_MODE:
-                from .local_kv import LocalKVSync
-                self.redis = LocalKVSync()
-                self.enabled = True
-                logger.info("同步缓存就绪(进程内实现)。")
-                return
-            self.redis = sync_redis.from_url(
-                f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}",
-                password=settings.REDIS_PASSWORD,
-                encoding="utf-8",
-                decode_responses=True,
-                socket_connect_timeout=REDIS_CONNECT_TIMEOUT_SEC,
-                socket_timeout=REDIS_CONNECT_TIMEOUT_SEC,
-            )
-            self.redis.ping()
-            self.enabled = True
-            logger.info("Sync Redis connected successfully.")
-        except Exception as e:
-            logger.warning(f"Failed to connect to Sync Redis: {e}. Sync operations will fallback or fail.")
-            self.enabled = False
-
-    def get(self, key: str) -> Any:
-        if not self.enabled or not self.redis:
-            return None
-        try:
-            data = self.redis.get(key)
-            # Try to parse as JSON if it looks like one, otherwise return string
-            if data:
-                try:
-                    return json.loads(data)
-                except (json.JSONDecodeError, TypeError):
-                    return data
-            return None
-        except Exception as e:
-            logger.error(f"Sync Redis get error: {e}")
-            return None
-            
-    def set(self, key: str, value: Any, ttl: int = None):
-        if not self.enabled or not self.redis:
-            return
-        try:
-            if isinstance(value, (dict, list)):
-                data = json.dumps(value)
-            else:
-                data = str(value)
-            self.redis.set(key, data, ex=ttl)
-        except Exception as e:
-            logger.error(f"Sync Redis set error: {e}")
-
-# =============================================================================
-# Step 3.1: Emotional State Model (Stored in Redis)
-# =============================================================================
-
-class EmotionalState(BaseModel):
-    current_mood: str = "Neutral"
-    intensity: int = Field(0, ge=0, le=100)
-    last_update: float = Field(default_factory=time.time)
-    decay_rate: int = 5 # Points per minute
-    
-    def apply_decay(self):
-        """Apply time-based decay to intensity"""
-        now = time.time()
-        elapsed_minutes = (now - self.last_update) / 60.0
-        if elapsed_minutes > 0:
-            decay_amount = int(elapsed_minutes * self.decay_rate)
-            self.intensity = max(0, self.intensity - decay_amount)
-            self.last_update = now
+# 说明:这里原先有一个 EmotionalState 模型和 get/set_emotional_state 两个方法。
+# 全库**没有任何地方写过** user:{uid}:emotional_state —— set 只在 get 内部的
+# 衰减回写里被调用,而那要求键已存在。于是 get 永远返回默认对象,
+# 且 pydantic 模型恒为真,调用方的 `if` 拦不住,结果每次生成都往提示词注入
+# 「当前情感状态: Neutral (强度: 0)」—— 一个与事实相反且完全静默的信号。
+# 真实情绪本就在图状态里(analyze 节点的 top_emotions),已改为直接使用。
 
 class RedisClient:
     """
@@ -232,32 +153,8 @@ class RedisClient:
             logger.error(f"Redis hgetall error: {e}")
             return {}
 
-    async def get_emotional_state(self, user_id: str) -> EmotionalState:
-        """Fetch and decay emotional state"""
-        key = f"user:{user_id}:emotional_state"
-        data = await self.get(key)
-        if data:
-            try:
-                state = EmotionalState(**json.loads(data))
-                # Apply decay on read
-                original_intensity = state.intensity
-                state.apply_decay()
-                if state.intensity != original_intensity:
-                    # Update back to Redis if decayed
-                    await self.set_emotional_state(user_id, state)
-                return state
-            except Exception as e:
-                logger.error(f"Failed to parse emotional state: {e}")
-        return EmotionalState()
-
-    async def set_emotional_state(self, user_id: str, state: EmotionalState):
-        """Save emotional state"""
-        key = f"user:{user_id}:emotional_state"
-        await self.set(key, state.model_dump_json(), ttl=86400) # 24h TTL
-
 # Global instance
 redis_client = RedisClient.get_instance()
-sync_redis_client = SyncRedisClient.get_instance()
 
 class _EmbeddedArqShim:
     """

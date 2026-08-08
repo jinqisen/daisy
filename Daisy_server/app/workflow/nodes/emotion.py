@@ -243,12 +243,30 @@ async def analyze_emotion(state: AgentState) -> AgentState:
         
         logger.info("情感与投入度分析 (Ekman + 上下文)", **log_content)
 
+        # 把本轮情绪写进用户状态,供**主动关心**判断是否要走情感急救。
+        #
+        # 这个写入原先根本不存在:StateService.update_emotional_state 全库零调用者,
+        # 于是 `user:{uid}:last_emotion` 永远是空,主动关心里的
+        # 「Track A 情感急救」判定 `if emotional_state:` 永远为假 ——
+        # 双轨门控实际上一直是单轨,负面情绪下最该主动关心的场景反而从不触发。
+        try:
+            if top:
+                from ...services.proactive.state import StateService
+                await StateService.update_emotional_state(state["user_id"], {
+                    "label": top[0][0],
+                    "score": float(top[0][1]),
+                    "summary": text[:120],
+                })
+        except Exception as e:
+            # 情绪留痕失败不能影响本轮对话
+            logger.warning(f"写入情感状态失败: {e}")
+
         # 更新 Trace
-        trace = await add_trace(state, "analyze", 
+        trace = await add_trace(state, "analyze",
             input_data={
                 "received_user_input": text,
                 "merged_context_text": full_text
-            }, 
+            },
             output_data={
                 "top_emotions": top, 
                 "engagement_score": engagement_score,

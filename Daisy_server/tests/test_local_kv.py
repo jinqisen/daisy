@@ -19,7 +19,7 @@ import threading
 
 import pytest
 
-from app.core.local_kv import LocalKVAsync, LocalKVSync, reset_for_tests
+from app.core.local_kv import LocalKVAsync, reset_for_tests
 
 
 @pytest.fixture(autouse=True)
@@ -221,26 +221,6 @@ class TestPipeline:
         run(go())
 
 
-class TestSyncAndAsyncShareState:
-    """
-    同步门面在线程池里被调用,异步门面在事件循环里 —— 两者必须看到同一份数据,
-    否则会出现"写进去了但读不到"这类最难查的问题。
-    """
-
-    def test_sync_sees_async_writes(self):
-        async def go():
-            await LocalKVAsync().set("shared", "v")
-        run(go())
-        assert LocalKVSync().get("shared") == "v"
-
-    def test_async_sees_sync_writes(self):
-        LocalKVSync().set("shared2", "v2")
-
-        async def go():
-            return await LocalKVAsync().get("shared2")
-        assert run(go()) == "v2"
-
-
 class TestFakeredisIsGone:
 
     def test_embedded_path_does_not_use_fakeredis(self):
@@ -249,9 +229,8 @@ class TestFakeredisIsGone:
         """
         import inspect
 
-        from app.core.redis import RedisClient, SyncRedisClient
+        from app.core.redis import RedisClient
 
-        for fn in (RedisClient.connect, SyncRedisClient.connect):
-            src = inspect.getsource(fn)
-            assert "fakeredis" not in src, f"{fn.__qualname__} 仍在用 fakeredis"
-            assert "LocalKV" in src
+        src = inspect.getsource(RedisClient.connect)
+        assert "fakeredis" not in src, "连接分支仍在用 fakeredis"
+        assert "LocalKV" in src

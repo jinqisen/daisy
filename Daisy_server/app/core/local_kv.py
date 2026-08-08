@@ -255,7 +255,8 @@ class _Pipeline:
         return results
 
 
-# 进程内单例:同步与异步客户端必须看到同一份数据
+# 进程内单例。曾经还有一个同步门面,随 SyncRedisClient 一并删除 ——
+# 后者全库零使用者,而为它维护第二套接口只会让人以为存在同步路径
 _STORE = _Store()
 _HUB = _Hub()
 
@@ -322,31 +323,6 @@ class LocalKVAsync:
         return None
 
     aclose = close
-
-
-class LocalKVSync:
-    """同步门面,与异步共享同一份数据。"""
-
-    def __init__(self) -> None:
-        self._store = _STORE
-
-    def ping(self) -> bool:
-        return True
-
-    def get(self, key: str) -> Optional[str]:
-        return self._store.get(key)
-
-    def set(self, key: str, value: Any, ex: Optional[int] = None) -> bool:
-        return self._store.set(key, value, ex)
-
-    def delete(self, *keys: str) -> int:
-        return self._store.delete(*keys)
-
-    def exists(self, key: str) -> int:
-        return self._store.exists(key)
-
-    def hgetall(self, key: str) -> Dict[str, str]:
-        return self._store.hgetall(key)
 
 
 def reset_for_tests() -> None:
