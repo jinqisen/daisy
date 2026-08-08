@@ -16,6 +16,7 @@
 import asyncio
 import json
 import threading
+import time
 
 import pytest
 
@@ -113,27 +114,41 @@ class TestHashOps:
         run(go())
 
 
-class TestKeysPattern:
-    """StateService.get_online_users 用 keys('user:*:online') 扫描。"""
+class TestExpiredKeysAreReclaimed:
+    """
+    惰性过期(读到才判断)**会漏**:`cache_result` 的键是按参数做 md5 的,
+    过期之后再也不会有人来读,于是每个失效条目都永久留在字典里。
 
-    def test_glob_matching(self):
-        async def go():
-            r = LocalKVAsync()
-            await r.set("user:a:online", "1")
-            await r.set("user:b:online", "1")
-            await r.set("user:a:last_active", "x")
-            assert sorted(await r.keys("user:*:online")) == \
-                ["user:a:online", "user:b:online"]
-        run(go())
+    实测过:写 1000 个 1 秒过期的缓存键,过期后只读别的键,字典大小仍是 1000。
+    fakeredis 自带主动过期,换成进程内实现时这层保障丢了 —— 这是替换引入的回归。
+    """
 
-    def test_expired_keys_not_listed(self):
-        async def go():
-            r = LocalKVAsync()
-            await r.set("user:a:online", "1", ex=1)
-            await asyncio.sleep(1.05)
-            assert await r.keys("user:*:online") == [], \
-                "过期键仍出现在 keys() 里 —— 会把离线用户当成在线"
-        run(go())
+    def test_expired_entries_do_not_accumulate(self):
+        from app.core.local_kv import _STORE
+
+        _STORE.flushall()
+        for i in range(_STORE._SWEEP_EVERY_WRITES * 2):
+            _STORE.set(f"cache:x:fn:{i:032x}", "v", ex=1)
+        time.sleep(1.05)
+        # 继续正常写入,应触发清扫
+        for i in range(_STORE._SWEEP_EVERY_WRITES):
+            _STORE.set(f"live:{i}", "v", ex=600)
+
+        leftover = [k for k in _STORE._data if k.startswith("cache:x:")]
+        assert not leftover, \
+            f"{len(leftover)} 个过期缓存键没有回收 —— 长时间运行会持续吃内存"
+
+    def test_unexpired_entries_survive_sweep(self):
+        """清扫不能误伤未过期的键。"""
+        from app.core.local_kv import _STORE
+
+        _STORE.flushall()
+        _STORE.set("keep", "v", ex=600)
+        _STORE.set("forever", "v")          # 无 TTL
+        for i in range(_STORE._SWEEP_EVERY_WRITES + 1):
+            _STORE.set(f"tmp:{i}", "v", ex=600)
+        assert _STORE.get("keep") == "v"
+        assert _STORE.get("forever") == "v"
 
 
 class TestPubSub:

@@ -40,7 +40,7 @@ L5 api         → core, models, prompts, services, workflow
 
 ## services 内部:按业务域再分一层
 
-L3 曾是平铺的 22 个文件、5225 行 —— 层次对了,但**层内没有结构**:
+L3 曾是平铺的 22 个文件、5000+ 行 —— 层次对了,但**层内没有结构**:
 记忆、人格、对话、主动关心全堆在同一个目录,既看不出谁属于哪块业务,
 也拦不住任何跨业务的随手调用。现按域拆为 6 个子包:
 
@@ -51,7 +51,7 @@ L3 曾是平铺的 22 个文件、5225 行 —— 层次对了,但**层内没有
 | `dialogue` | 这一轮「说什么、走哪条路径」 | `generation` / `router` / `tools` |
 | `proactive` | 无用户输入时主动开口 | `service` / `state` / `holidays` |
 | `learning` | 从已发生的对话回捞改进信号 | `reflexion/` / `reflexion_system` / `rl_agent` / `rl_dataset` |
-| `system` | 启动装配与横切关注点 | `init_data` / `schema_bootstrap` / `session` / `key_verification` / `local_lock` / `trace_store` |
+| `system` | 启动装配与横切关注点 | `init_data` / `schema_bootstrap` / `session` / `key_verification` / `local_lock` / `trace_store` / `metrics_store` |
 
 域间依赖实测**无环**,方向天然分层(由 `test_service_domains.py` 持续校验):
 
@@ -87,11 +87,11 @@ memory      ← 叶子,不依赖任何域
 | 曾经放错 | 为什么错 | 现在 |
 |---|---|---|
 | `api/sse.py` | 纯协议编解码、无路由,却被 tasks/services 共用 | `core/sse.py` |
-| `core/fusion.py` | 人格融合引擎是业务逻辑 | `services/fusion.py` |
-| `core/reflexion.py` | 反思系统是业务逻辑 | `services/reflexion_system.py` |
-| `core/init_data.py` | 种子数据装载不是基础设施 | `services/init_data.py` |
+| `core/fusion.py` | 人格融合引擎是业务逻辑 | `services/persona/fusion.py` |
+| `core/reflexion.py` | 反思系统是业务逻辑 | `services/learning/reflexion_system.py` |
+| `core/init_data.py` | 种子数据装载不是基础设施 | `services/system/init_data.py` |
 | `services/llm.py` | provider 配置/重试/埋点是基础设施 | `core/llm.py` |
-| `core/{router,tools,holidays}.py` | 路由决策、搜索工具、节日都是业务 | `services/` |
+| `core/{router,tools,holidays}.py` | 路由决策、搜索工具、节日都是业务 | `services/dialogue/`、`services/proactive/` |
 | `core/{rubrics,strategies}.py` | 纯枚举,是领域词汇表 | `agents/` |
 
 ## 反转依赖的两个手法
@@ -102,9 +102,13 @@ memory      ← 叶子,不依赖任何域
 分发器住在 core 却要找到 tasks 里的任务函数。改为 core 只持一张表,
 tasks 在导入时自行登记。
 
-**可插拔接口**(`core/trace_sink.py`)
-LLM 客户端要写调用轨迹,但"存到哪张表"是持久化关注点。
+**可插拔接口**(`core/trace_sink.py`、`core/metrics_sink.py`)
+LLM 客户端要写调用轨迹与指标,但"存到哪张表"是持久化关注点。
 core 只声明 sink,services 启动时注入实现。
+
+这层间接不是为了"可扩展",而是为了**依赖方向**:core 直接 import 模型会让最底层
+反过来依赖持久化层,循环随之而来。同时它顺带给出一条好性质 ——
+未注入实现时静默丢弃,所以脚本和测试里不装 sink 也能正常跑。
 
 ## 护栏
 
@@ -163,3 +167,33 @@ async def tool_check(state): ...
 **硬约束:隐私锁是可选的,未设置时绝不拦人。** 可选的安全措施一旦成为无法绕过的
 障碍,就是事故。锁文件损坏时也按"未设锁"处理 —— 数据仍在本机,把用户挡在外面
 只会逼他删掉整个数据目录。
+
+
+## 一条贯穿本轮的判断标准
+
+重构过程中反复用到同一个问题,值得单独写下来:
+
+> **这个东西丢了会怎样?**
+
+按答案分类,归属就清楚了:
+
+| 丢了会怎样 | 归属 | 例子 |
+|---|---|---|
+| 只是变慢,能自动重建 | 缓存(必须带 TTL) | 情绪分类结果、话题摘要、Provider 配置 |
+| 无所谓,本来就该随进程消失 | 进程内状态 | SSE 通道、并发锁、在线标记、单次执行的预算账本 |
+| **功能会静默失效** | **SQLite** | 每日配额、冷却时间、作息统计、累计指标 |
+
+最后一类是所有麻烦的来源 —— 它们曾经全都待在"看起来像数据库"的内存缓存里。
+判断错的代价不是报错,而是**功能悄悄不工作而没人发现**:
+
+- 主动关心的作息统计需累计 ≥10 样本才可信,而重启归零 → 从未生效过;
+- 每日配额重启即清零 → 上限可被绕过;
+- SLO 面板只反映本次运行 → 成本统计没有意义。
+
+同一个判断也适用于**别的东西**,不只是存储:
+
+- 两条情绪链路读的键从来没有写入方 → 生成侧持续注入「Neutral (强度: 0)」;
+- 记忆检索查询没做 JSON 清洗 → 5% 的检索用一串 markdown 去做向量匹配。
+
+它们的共同点是:**失败时不报错**。所以这类问题的护栏只能靠测试主动去问
+"它真的在工作吗",而不能等报警。本轮新增的护栏基本都属于这一类。

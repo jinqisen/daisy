@@ -38,14 +38,18 @@ class _Store:
     两者共享同一份数据(SSE 广播、缓存必须看到同一份状态)。
     """
 
+    # 每写入这么多次做一轮清扫。摊还成本极低,又不需要后台线程。
+    _SWEEP_EVERY_WRITES = 500
+
     def __init__(self) -> None:
         self._data: Dict[str, Tuple[Any, Optional[float]]] = {}
         self._lock = threading.RLock()
+        self._writes_since_sweep = 0
 
     # -- 内部 ----------------------------------------------------------------
 
     def _alive(self, key: str) -> bool:
-        """惰性过期:读到才判断,不需要后台清理线程。"""
+        """惰性过期:读到才判断。"""
         item = self._data.get(key)
         if item is None:
             return False
@@ -62,6 +66,30 @@ class _Store:
     def _set_raw(self, key: str, value: Any, ttl: Optional[float]) -> None:
         with self._lock:
             self._data[key] = (value, (time.time() + ttl) if ttl else None)
+            self._writes_since_sweep += 1
+            if self._writes_since_sweep >= self._SWEEP_EVERY_WRITES:
+                self._sweep_expired()
+
+    def _sweep_expired(self) -> int:
+        """
+        主动清掉已过期的键。**必须有这一步** —— 光靠读取时的惰性过期会漏:
+
+        `cache_result` 的键是按参数内容做 md5 的(`cache:{前缀}:{函数}:{md5}`),
+        参数一变就是新键;过期之后**再也不会有人来读它**,惰性过期永远不触发,
+        于是每个失效的缓存条目都会永久留在字典里。
+
+        实测:写 1000 个 1 秒过期的缓存键,过期后只读别的键,字典大小仍是 1000。
+        fakeredis 自带主动过期,替换成进程内实现时这一层保障丢了 —— 属于本次替换
+        引入的回归,不是原有问题。
+        """
+        with self._lock:
+            now = time.time()
+            dead = [k for k, (_, exp) in self._data.items()
+                    if exp is not None and now >= exp]
+            for k in dead:
+                self._data.pop(k, None)
+            self._writes_since_sweep = 0
+            return len(dead)
 
     # -- 字符串 --------------------------------------------------------------
 
@@ -285,9 +313,6 @@ class LocalKVAsync:
 
     async def expire(self, key: str, ttl: int) -> bool:
         return self._store.expire(key, ttl)
-
-    async def keys(self, pattern: str = "*") -> List[str]:
-        return self._store.keys(pattern)
 
     async def incr(self, key: str) -> int:
         return self._store.incrby(key, 1)

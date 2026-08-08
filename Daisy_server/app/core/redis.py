@@ -130,13 +130,9 @@ class RedisClient:
             logger.error(f"Redis exists error: {e}")
             return 0
 
-    async def keys(self, pattern: str) -> list:
-        if not self.enabled: return []
-        try:
-            return await self.redis.keys(pattern)
-        except Exception as e:
-            logger.error(f"Redis keys error: {e}")
-            return []
+    # 说明:原先这里有 keys(pattern)。它唯一的使用者 get_online_users() 从未被
+    # 生产代码调用过,两者已一并移除。keys() 是 O(全部键) 的扫描,
+    # 留一个没人用的扫描接口只会诱导后来者去用它。
 
     async def hincrby(self, key: str, field: str, amount: int = 1):
         if not self.enabled: return

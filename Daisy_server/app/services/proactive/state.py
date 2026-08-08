@@ -33,14 +33,10 @@ class StateService:
         key = f"user:{user_id}:online"
         return await redis_client.exists(key) > 0
         
-    @staticmethod
-    async def get_online_users() -> list[str]:
-        """获取所有在线用户 ID"""
-        # 扫描 user:*:online
-        # 生产环境建议使用 Set 维护在线列表以提高性能，这里简单使用 keys
-        # 或者维护一个 user:online_set
-        keys = await redis_client.keys("user:*:online")
-        return [k.split(":")[1] for k in keys]
+    # 说明:这里原先有一个 get_online_users(),用 keys("user:*:online") 扫描全库。
+    # 它**从未被任何生产代码调用**过 —— 主动关心用的是 is_user_online(单个用户)。
+    # 留着它的代价不只是几行死代码:它是全库唯一的 keys() 使用者,
+    # 而 keys() 是 O(全部键) 的扫描操作,留着就等于给后来者留了个看似可用的坑。
 
     @staticmethod
     async def get_all_known_users() -> list[str]:

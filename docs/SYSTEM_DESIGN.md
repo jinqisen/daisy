@@ -1,5 +1,9 @@
 # Daisy 系统设计与 Feature 全集(阶段性归档)
 
+> 最近更新:2026-08-09,对应「存储归位 / 配置收敛 / services 域拆分」一轮重构。
+> 配套文档:[ARCHITECTURE.md](ARCHITECTURE.md)(分层规则)、
+> [PLAN_storage_and_config.md](PLAN_storage_and_config.md)(本轮方案与实施记录)。
+
 归档日期:2026-08-08
 版本:0.1.0(桌面版,未正式发布)
 文档结构:[arc42](https://arc42.org/overview/) 十二节 + [C4](https://c4model.com/) 分层视图
@@ -84,7 +88,7 @@
 
 | 问题 | 策略 | 关键权衡 |
 |---|---|---|
-| 五进程依赖太重 | Redis→进程内 fakeredis;Qdrant→本地路径;worker→并入后端 | 牺牲横向扩展换取零配置。桌面单用户无扩展需求 |
+| 五进程依赖太重 | Redis→进程内缓存(`core/local_kv.py`);Qdrant→本地路径;worker→并入后端 | 牺牲横向扩展换取零配置。桌面单用户无扩展需求 |
 | 首次使用要下 1.3GB 模型 | 构建期拉取,随包分发 | .dmg 808M→941M,换取离线开箱即用 |
 | 嵌入模型体积 | 选 bge-small(512 维)而非 bge-large(1024 维) | 召回质量略降,包体省 1.2GB |
 | LLM 输出 JSON 不可靠 | 容错解析(标准解析失败再修复) | 实测**每次**角色卡生成都命中畸形 JSON |
@@ -109,7 +113,7 @@
 │  后端 sidecar(单进程,FastAPI + uvicorn)            │
 │  · 看门狗:父进程消失即 os._exit                     │
 │  ├ HTTP API  ├ LangGraph 工作流  ├ APScheduler       │
-│  ├ fakeredis(进程内)  ├ SQLite  ├ Qdrant(本地)    │
+│  ├ 进程内缓存  ├ SQLite(唯一真源)  ├ Qdrant(本地) │
 │  └ 本地模型:bge-small / MiniLM / goemotions         │
 └─────────────────────────────────────────────────────┘
 ```
@@ -142,16 +146,43 @@ api         → core, models, prompts, services, workflow
 
 **依赖反转的两个手法**(底层需要上层能力时):
 - 注册表 `core/job_registry.py` —— tasks 导入时自登记,core 只查表
-- 可插拔接口 `core/trace_sink.py` —— core 持接口,services 注入实现
+- 可插拔接口 `core/trace_sink.py` / `core/metrics_sink.py` —— core 持接口,services 注入实现
+
+#### L3 内部:按业务域再分一层
+
+L3 曾是平铺的 22 个文件、5000+ 行 —— 层次对了但**层内无结构**,
+既看不出谁属于哪块业务,也拦不住跨业务的随手调用。现分为 6 个域:
+
+| 域 | 职责 | 主要模块 |
+|---|---|---|
+| `memory` | 对话内容的存取 | `store` / `chat_history` / `topic_agent` |
+| `persona` | Daisy「是谁、此刻什么状态」 | `character_card` / `fusion` / `strategy` / `emotion` |
+| `dialogue` | 这一轮「说什么、走哪条路径」 | `generation` / `router` / `tools` |
+| `proactive` | 无用户输入时主动开口 | `service` / `state` / `holidays` |
+| `learning` | 从已发生的对话回捞改进信号 | `reflexion/` / `reflexion_system` / `rl_agent` / `rl_dataset` |
+| `system` | 启动装配与横切关注点 | `init_data` / `schema_bootstrap` / `session` / `key_verification` / `local_lock` / `trace_store` / `metrics_store` |
+
+域间实测**无环**,方向天然分层(`tests/test_service_domains.py` 以棘轮守住):
+
+```
+memory  ← 叶子,不依赖任何域
+   ↑ learning ← persona
+   ↑ dialogue(← memory, persona)
+   ↑ proactive(← memory)
+   ↑ system(← memory, dialogue)
+```
+
+两条约定:域包的 `__init__.py` **不做重导出**(避免包属性遮蔽同名子模块);
+services 内部统一**绝对导入**(相对层级会随目录深度变化)。
 
 ### 5.3 规模
 
 | 项 | 数量 |
 |---|---|
-| 后端 Python 文件 / 行数 | 100 / 14,430 |
-| 前端 TS/TSX 文件 | 23 |
-| 测试文件 / 用例 | 43 / **331 passed** |
-| 数据表 | 8 |
+| 后端 Python 文件 / 行数 | 109 / 15,242 |
+| 前端 TS/TSX 文件 | 27 |
+| 测试文件 / 用例 | 56 / **416 passed** |
+| 数据表 | 9 |
 | 本地模型 | 3 个 + RL 权重(磁盘占用 594 MB)|
 
 ---
@@ -280,7 +311,7 @@ Daisy.app (941 MB)
 
 | 配置 | 值 | 说明 |
 |---|---|---|
-| `EMBEDDED_MODE` | true | 进程内 fakeredis + 本地 Qdrant |
+| `EMBEDDED_MODE` | true | 进程内缓存 + 本地 Qdrant |
 | `EMBEDDING_MODEL_NAME` / `EMBEDDING_DIMS` | bge-small-zh-v1.5 / 512 | 两者必须一致,否则 Qdrant 静默拒写 |
 | `EXEC_BUDGET_MAX_LLM_CALLS` / `MAX_TOKENS` | 25 / 40000 | 实测 DEEP 峰值 11 次 |
 | `DEEP_TOOL_MAX_STEPS` | 3 | 工具循环上限 |
@@ -294,11 +325,26 @@ Daisy.app (941 MB)
 |---|---|---|
 | 结构化数据 | SQLite | 用户数据目录 |
 | 向量 | Qdrant 嵌入模式 | 同上 |
-| 缓存 / 队列 / 计数 | fakeredis(进程内) | 内存,**重启即失** |
+| 缓存 | 进程内 KV(`core/local_kv.py`) | 内存,**重启即失 —— 因此只放缓存** |
 | 记忆历史 | mem0 + SQLite | `MEM0_DIR` 重定向 |
 
-> **重启即失是设计后果,不是 bug** —— 但凡"必须跨重启"的事实(用户名单、
-> 最后活跃时间)都必须以数据库为准。主动关心曾因只读 Redis 而在重启后完全静默。
+收敛后的规则,可被测试校验:
+
+> **SQLite 是唯一真源;缓存只是缓存 —— 任何写入缓存的键都必须带 TTL,
+> 且丢失后能从 SQLite 重建。**
+
+这条规则是被真实故障逼出来的。缓存"看起来像数据库"的错觉造成过四个同类缺陷:
+
+| 曾经放在缓存里的长期事实 | 后果 |
+|---|---|
+| 已知用户名单 | 重启后主动关心完全静默(库里明明有 24 条对话) |
+| 每日配额 | **重启即可绕过每日上限** |
+| 冷却时间 | 重启后刚开机就可能立刻打扰 |
+| 作息统计 | 需累计 ≥10 样本才可信,而重启归零 → 「按作息挑时间」从未生效 |
+| SLO 累计指标 | 面板只反映本次运行,成本统计无意义 |
+
+现全部改为从 `chat_history` / `metric_events` 推导 —— 那本来就是同一个事实,
+且不存在"计数器与事实不一致"的可能。
 
 ### 8.3 可观测性
 
@@ -327,7 +373,7 @@ Daisy.app (941 MB)
 | # | 决策 | 理由 | 代价 |
 |---|---|---|---|
 | 1 | 去 Docker,单进程嵌入 | 桌面用户不会配环境 | 失去横向扩展(单用户无需) |
-| 2 | fakeredis 替代 Redis | 零外部依赖 | 重启即失 → 关键事实必须落库 |
+| 2 | 进程内缓存替代 Redis | 零外部依赖 | 重启即失 → **长期事实一律落 SQLite**,缓存必须带 TTL 且可重建 |
 | 3 | 模型构建期拉取 | 运行时下载会卡住功能且断网即废 | 包体 +133 MB |
 | 4 | bge-small 而非 large | 包体差 1.2 GB | 召回质量略降 |
 | 5 | 免登录本地会话 + 365 天令牌 | 无服务端,短 TTL 无安全收益却会让长时间使用全部 401 | 令牌长期有效(仅本机) |
@@ -370,6 +416,21 @@ Daisy.app (941 MB)
 
 7 个循环依赖全部消除;18/18 LLM 调用点已记账;3 个本地模型随包分发;
 mem0 工作目录已迁出家目录;安装包已确认无密钥。
+
+**本轮(存储与配置收敛)追加还清:**
+
+| 债 | 曾经的后果 | 现状 |
+|---|---|---|
+| L3 平铺 22 个文件 | 看不出归属,拦不住跨业务调用 | 6 个业务域,域间无环 + 棘轮护栏 |
+| 配置四处来源无优先级 | 换模型时三处不一致,排查很久 | 单一入口 + 启动打印每项来源 |
+| `Settings` 有两个 `model_config` | `env_file` 变相对 cwd、utf-8 声明丢失(Windows 隐患) | 已删重复项 |
+| 长期事实存在进程内缓存 | 配额可绕过、冷却失效、作息统计从未生效 | 全部从事实表推导 |
+| SLO 指标存缓存 | 重启归零,成本统计无意义 | `metric_events` 事实表 |
+| fakeredis | 网络缓存仿真器做字典的事;制造"可放长期数据"的错觉 | 进程内 KV,依赖已移除 |
+| 库里 naive UTC 被当本地时间(2 处) | 忙碌保护恒失效;M_rtl 恒饱和,RL 信号是坏的 | 统一 `naive_utc_to_epoch` |
+| 主动消息用户名写进整数外键 | 消息不属于任何用户,统计与历史都看不到 | 已修 + 回归测试 |
+| 两条情绪链路无写入方 | 每次注入「Neutral (强度: 0)」假信号;情感急救永不触发 | 已接通 + 回归测试 |
+| 测试写开发机真实库 | 与"密钥进 .dmg"同类的副作用外溢 | `conftest.py` 会话级隔离 |
 
 ---
 
