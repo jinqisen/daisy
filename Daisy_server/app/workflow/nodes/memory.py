@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import asyncio
 import json
+import re
 import time
 import structlog
 from ..capability import essential, enhancement
@@ -14,6 +15,53 @@ from .tools import add_trace, get_common_settings_async, monitor_execution_time,
 from ...core.exceptions import NodeError
 
 logger = structlog.get_logger()
+
+
+def _clean_search_query(raw: str) -> str:
+    """
+    把 LLM 返回的内容整理成可用的检索查询,不可用时返回空串(调用方回落原句)。
+
+    提示词明确要求"仅输出搜索查询字符串",但模型并不总是听话。实测 158 次检索里
+    有 5% 的查询被污染,最典型的是这种:
+
+        ```json
+        {"search_query": "文本理解和分析的含义与定义"}
+        ```
+
+    原实现只做 `.strip()`,于是整段 markdown 连同反引号和 JSON 包装被当成查询文本
+    送去做向量检索 —— 不会报错,只是悄悄检索了一段无意义的字符串,
+    表现为"这次怎么什么都没想起来"。项目里本来就有 `core/json_utils` 处理这类问题,
+    只是这条路径没接上。
+
+    另外拦掉未被替换的模板占位符(历史数据里出现过字面量 `{text}`):
+    那种查询同样不会报错,只会静默劣化检索质量。
+    """
+    from ...core.json_utils import strip_code_fence
+
+    text = strip_code_fence((raw or "").strip()).strip()
+    if not text:
+        return ""
+
+    # 模型把结果包成了 JSON:取出里面的查询字段
+    if text.startswith("{"):
+        try:
+            from ...core.json_utils import parse_llm_json
+            data = parse_llm_json(text)
+            if isinstance(data, dict):
+                for key in ("search_query", "query", "text"):
+                    v = data.get(key)
+                    if isinstance(v, str) and v.strip():
+                        return v.strip()
+            return ""
+        except Exception:
+            return ""
+
+    # 未被替换的模板占位符,如 "{text}" / "{{text}}"
+    if re.fullmatch(r"\{{1,2}\s*\w+\s*\}{1,2}", text):
+        return ""
+
+    return text
+
 
 @enhancement(fallback={"retrieved_memories": []})
 @monitor_execution_time
@@ -104,8 +152,14 @@ async def retrieve_memory(state: AgentState) -> AgentState:
                     )
 
                 if generated_query and "Error" not in generated_query and "[MOCK LLM]" not in generated_query:
-                    search_query = generated_query.strip()
-                    logger.info(f"优化后的搜索查询: '{text}' -> '{search_query}'")
+                    cleaned = _clean_search_query(generated_query)
+                    if cleaned:
+                        search_query = cleaned
+                        logger.info(f"优化后的搜索查询: '{text}' -> '{search_query}'")
+                    else:
+                        logger.warning(
+                            f"生成的搜索查询无法使用,回退原句: {generated_query[:60]!r}"
+                        )
             except Exception as e:
                 logger.error(f"生成搜索查询失败: {e}")
                 raise e
