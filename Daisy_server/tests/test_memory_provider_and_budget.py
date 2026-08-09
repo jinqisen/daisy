@@ -78,7 +78,7 @@ class TestMemoryFollowsChatProvider:
         assert "get_memory_service.cache_clear()" in src
 
     def test_cache_cleared_on_settings_provider_switch(self):
-        from app.api.routers import config as config_router
+        from app.api.routers import common_settings as config_router
 
         src = inspect.getsource(config_router.update_common_settings)
         assert "get_memory_service.cache_clear()" in src

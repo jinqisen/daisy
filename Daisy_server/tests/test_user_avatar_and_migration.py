@@ -37,7 +37,7 @@ class TestUserAvatarField:
     def test_config_route_maps_both_avatars(self):
         """读写两端都要映射 —— 只加字段不接线是最常见的漏法。"""
         import inspect as _inspect
-        from app.api.routers import config as config_router
+        from app.api.routers import common_settings as config_router
 
         read = _inspect.getsource(config_router.get_common_settings)
         write = _inspect.getsource(config_router.update_common_settings)

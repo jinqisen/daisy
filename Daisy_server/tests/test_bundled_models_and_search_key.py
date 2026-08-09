@@ -98,7 +98,7 @@ class TestBuildTimeFetch:
 class TestSearchKeyHasSameTreatmentAsLLMKeys:
 
     def test_backend_accepts_search_key(self):
-        from app.api.routers.config import _KEY_ENV_NAMES
+        from app.api.routers.llm_config import _KEY_ENV_NAMES
         assert "HUAWEI_SEARCH_API_KEY" in _KEY_ENV_NAMES
 
     @pytest.mark.asyncio

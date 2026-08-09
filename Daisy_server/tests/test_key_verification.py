@@ -160,7 +160,7 @@ class TestEndpointRejectsBeforePersisting:
     def test_route_probes_before_writing(self):
         """校验必须在写文件之前 —— 顺序反了等于没校验。"""
         import inspect
-        from app.api.routers import config as config_router
+        from app.api.routers import llm_config as config_router
 
         src = inspect.getsource(config_router.set_llm_keys)
         assert "verify_key" in src, "端点未做保存前校验"
@@ -169,7 +169,7 @@ class TestEndpointRejectsBeforePersisting:
 
     def test_route_only_rejects_definitive_failures(self):
         import inspect
-        from app.api.routers import config as config_router
+        from app.api.routers import llm_config as config_router
 
         src = inspect.getsource(config_router.set_llm_keys)
         assert "INVALID" in src

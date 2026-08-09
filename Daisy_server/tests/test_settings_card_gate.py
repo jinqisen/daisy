@@ -14,7 +14,7 @@ import inspect
 
 import pytest
 
-from app.api.routers import config as config_router
+from app.api.routers import common_settings as config_router
 from app.core.config import settings
 
 
