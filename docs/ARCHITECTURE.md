@@ -93,6 +93,14 @@ memory      ← 叶子,不依赖任何域
 | `services/llm.py` | provider 配置/重试/埋点是基础设施 | `core/llm.py` |
 | `core/{router,tools,holidays}.py` | 路由决策、搜索工具、节日都是业务 | `services/dialogue/`、`services/proactive/` |
 | `core/{rubrics,strategies}.py` | 纯枚举,是领域词汇表 | `agents/` |
+| `core/redis.py` | 一半是 ARQ 任务队列;而嵌入模式下两者都不碰 Redis,文件名双重误导 | `core/cache.py` + `core/task_queue.py` |
+| `core/config.py` 里的路径解析 | 不是配置项,只是碰巧都用到 `_base_dir` | `core/paths.py` |
+| `core/config.py` 里的白名单 | "谁有资格注册"是业务规则,core 不该含业务概念 | `services/system/whitelist.py` |
+| `api/routers/config.py` | 三类关注点共处一文件,共同点只是同一 URL 前缀 —— 那是路由结构,不是内聚性 | `llm_config` / `common_settings` / `profiles` |
+
+> 拆 router 时 **URL 必须逐字不变**:三个 router 仍挂同一前缀,
+> 并实测枚举全部 8 条 `/api/config` 路径与前端调用对账。
+> 路由改名不会报错,只会让前端静默 404 —— 又是"失败时不报错"那一类。
 
 ## 反转依赖的两个手法
 
