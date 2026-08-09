@@ -69,7 +69,17 @@ def load_config_sources(
         with open(config_path, "r", encoding="utf-8") as f:
             file_config = json.load(f)
         for k, v in file_config.items():
-            if v is None:
+            # 空值表示"用户还没填这一项",不是"用户要求置空"。
+            # 设置界面对未填字段写的就是 "",若把它当成有效值,就会**覆盖掉**
+            # .env 里的真实配置。实测踩到过:server_config.json 里
+            # MAAS_API_KEY 是 "",而 .env 里是真实密钥,启动后报
+            # "no usable LLM provider is configured" —— 报错信息完全指向别处,
+            # 排查时根本想不到是配置来源的优先级。
+            #
+            # 改优先级之前不会有这个问题:那时的规则是"键已在环境中就跳过",
+            # .env 的值恰好受到保护。提高 json 的优先级就必须同时定义清楚
+            # "什么算作已配置"。
+            if v is None or (isinstance(v, str) and not v.strip()):
                 continue
             key = k.upper()
 

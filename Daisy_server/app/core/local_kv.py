@@ -97,9 +97,24 @@ class _Store:
         v = self._get_raw(key)
         return v if isinstance(v, str) else None
 
-    def set(self, key: str, value: Any, ex: Optional[int] = None) -> bool:
-        self._set_raw(key, str(value), ex)
-        return True
+    def set(self, key: str, value: Any, ex: Optional[int] = None,
+            nx: bool = False) -> bool:
+        """
+        `nx=True` 即 SETNX:仅当键不存在时才写入,返回是否写成功。
+
+        这是**分布式锁的原语**,chat_task 用它保证同一用户同时只有一个对话任务
+        (`lock:user:{id}`)。第一版实现漏了这个参数,对话直接报
+        `LocalKVAsync.set() got an unexpected keyword argument 'nx'` ——
+        当初统计调用点时我只数了 `set(` 出现的**次数**,没看**参数**。
+
+        检查与写入必须在同一把锁内完成,否则两个并发请求可能同时判定
+        "键不存在"而都拿到锁 —— 那正是这把锁要防的事。
+        """
+        with self._lock:
+            if nx and self._alive(key):
+                return False
+            self._set_raw(key, str(value), ex)
+            return True
 
     def incrby(self, key: str, amount: int = 1) -> int:
         with self._lock:
@@ -302,8 +317,9 @@ class LocalKVAsync:
     async def get(self, key: str) -> Optional[str]:
         return self._store.get(key)
 
-    async def set(self, key: str, value: Any, ex: Optional[int] = None) -> bool:
-        return self._store.set(key, value, ex)
+    async def set(self, key: str, value: Any, ex: Optional[int] = None,
+                  nx: bool = False) -> bool:
+        return self._store.set(key, value, ex, nx=nx)
 
     async def delete(self, *keys: str) -> int:
         return self._store.delete(*keys)

@@ -172,3 +172,50 @@ class TestProvenanceIsObservable:
         src = open(os.path.join(SERVER, "app", "main.py"), encoding="utf-8").read()
         assert "describe_config_sources" in src, \
             "启动流程没有打印配置来源 —— 下次三处不一致仍然要靠猜"
+
+
+class TestEmptyValuesDoNotClobber:
+    """
+    空值表示"用户还没填这一项",不是"用户要求置空"。
+
+    这条回归来自**真实启动**,不是设想:server_config.json 里 MAAS_API_KEY 是 "",
+    而 .env 里是真实密钥。提高 json 优先级后,空串覆盖了真实值,启动日志报的却是
+    `no usable LLM provider is configured` —— 指向完全无关的方向,
+    排查时根本想不到是配置优先级。
+
+    教训:**提高某个来源的优先级,就必须同时定义清楚"什么算作已配置"**。
+    改之前那版规则("键已在环境中就跳过")恰好让 .env 免疫,掩盖了这个问题。
+    """
+
+    KEY = "DAISY_TEST_EMPTY"
+
+    def _run(self, tmp_path, env_val, json_val):
+        from app.core.config import load_config_sources
+
+        (tmp_path / ".env").write_text(f"{self.KEY}={env_val}\n", encoding="utf-8")
+        cfg = tmp_path / "server_config.json"
+        cfg.write_text(json.dumps({self.KEY: json_val}), encoding="utf-8")
+        environ, provenance = {}, {}
+        load_config_sources(str(tmp_path / ".env"), str(cfg),
+                            frozenset(), provenance, environ=environ)
+        return environ.get(self.KEY)
+
+    def test_empty_string_does_not_override(self, tmp_path):
+        assert self._run(tmp_path, "real-key", "") == "real-key", \
+            "空串覆盖了 .env 的真实值 —— 密钥会静默丢失"
+
+    def test_whitespace_only_does_not_override(self, tmp_path):
+        """界面上敲了空格再删,存下来可能是 '  '。"""
+        assert self._run(tmp_path, "real-key", "   ") == "real-key"
+
+    def test_null_does_not_override(self, tmp_path):
+        assert self._run(tmp_path, "real-key", None) == "real-key"
+
+    def test_real_value_still_overrides(self, tmp_path):
+        """别矫枉过正:非空值仍然必须压过 .env。"""
+        assert self._run(tmp_path, "from-env", "from-ui") == "from-ui"
+
+    def test_zero_is_a_real_value(self, tmp_path):
+        """0 / False 是有效配置值,不能被当成"没填"。"""
+        assert self._run(tmp_path, "5", 0) == "0"
+        assert self._run(tmp_path, "true", False) == "False"

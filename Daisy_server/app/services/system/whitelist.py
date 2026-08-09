@@ -13,9 +13,11 @@ import json
 import logging
 import os
 
-# <root>/Daisy_server
-_base_dir = os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__)))))
+# 后端根目录用共享常量 —— 数 dirname 层数的写法会被文件移动静默改坏
+# (init_data.py 就这样在本轮拆分中指向了错误目录,见 tests/test_path_resolution.py)
+from app.core.paths import SERVER_DIR
+
+_base_dir = SERVER_DIR
 
 
 def load_whitelist() -> dict:

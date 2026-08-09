@@ -52,9 +52,10 @@ async def load_llm_providers_to_redis():
     """
     try:
         # 修改：从根目录加载 llm_providers.json
-        # 向上回退到项目根目录 (app/core -> app -> Daisy_server)
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        config_path = os.path.join(base_dir, "llm_providers.json")
+        # 用共享常量,不要数 dirname 层数 —— 本文件从 app/core/ 移到
+        # app/services/system/ 时层数没跟着改,曾去 app/ 下找这个文件。
+        from app.core.paths import SERVER_DIR
+        config_path = os.path.join(SERVER_DIR, "llm_providers.json")
         
         if not os.path.exists(config_path):
             logger.warning(f"LLM providers config file not found at {config_path}")
@@ -113,8 +114,9 @@ async def init_portraits():
     """
     检查并缓存预设角色的画像。
     """
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    settings_path = os.path.join(base_dir, "default_settings.json")
+    # 同上:用共享常量而非数层数(本文件移动过两层,曾指向 app/)
+    from app.core.paths import SERVER_DIR
+    settings_path = os.path.join(SERVER_DIR, "default_settings.json")
     
     if not os.path.exists(settings_path):
         return

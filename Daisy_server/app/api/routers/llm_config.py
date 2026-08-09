@@ -32,7 +32,8 @@ async def get_llm_providers():
     获取可用的 LLM 提供商列表。
     """
     # app/api/routers/config.py -> app/api/routers -> app/api -> app -> Daisy_server
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    from app.core.paths import SERVER_DIR
+    base_dir = SERVER_DIR
     config_path = os.path.join(base_dir, "llm_providers.json")
     
     if not os.path.exists(config_path):
@@ -81,7 +82,8 @@ def _user_config_path() -> str:
     p = os.environ.get("DAISY_CONFIG_PATH")
     if p:
         return p
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    from app.core.paths import SERVER_DIR
+    base_dir = SERVER_DIR
     return os.path.join(base_dir, "server_config.json")
 
 

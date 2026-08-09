@@ -49,10 +49,11 @@ class RLAgent:
         # self.optimizer = optim.Adam(self.policy.parameters(), lr=LR) # 推理模式不需要
         # self.memory = [] # 移除
         
-        # 定义路径
-        # Daisy_server/app/services/rl_agent.py -> ../model (sibling of Daisy_server)
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        server_dir = os.path.dirname(os.path.dirname(current_dir))
+        # 用共享常量。原先按"当前文件向上两层"算,而本文件从 app/services/
+        # 移到 app/services/learning/ 后层数已经不对 —— 它之所以还能工作纯属巧合
+        # (算出来的目录恰好也含 model/)。这类靠数层数的路径会被移动静默改坏。
+        from app.core.paths import SERVER_DIR
+        server_dir = SERVER_DIR
         
         # 尝试兄弟目录 model 优先
         model_dir = os.path.join(os.path.dirname(server_dir), "model")

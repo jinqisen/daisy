@@ -176,7 +176,8 @@ async def update_common_settings(
         cached_portrait = await redis_client.get(cache_key)
         
         if cached_portrait:
-             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+             from app.core.paths import SERVER_DIR
+             base_dir = SERVER_DIR
              settings_path = os.path.join(base_dir, "default_settings.json")
              if os.path.exists(settings_path):
                  with open(settings_path, "r", encoding="utf-8") as f:

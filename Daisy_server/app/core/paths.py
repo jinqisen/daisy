@@ -17,6 +17,13 @@ from typing import Optional
 # <root>/Daisy_server —— 与 config.py 各自独立计算,避免互相 import
 _base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# 公开别名。**需要后端根目录的地方一律用它,不要再各自数 dirname 层数** ——
+# 那种写法会被文件移动静默改坏:本轮把 init_data.py 从 app/core/ 移到
+# app/services/system/(深了两层),而"向上三层"没跟着改,于是它去
+# app/ 下找 llm_providers.json,找不到只打了一条 WARNING,
+# 表现却是启动时报 "no usable LLM provider is configured" —— 指向完全无关的方向。
+SERVER_DIR = _base_dir
+
 
 def get_writable_data_dir() -> str:
     """

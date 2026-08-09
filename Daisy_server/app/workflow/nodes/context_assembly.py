@@ -188,7 +188,7 @@ async def _generate_costar_instruction(common: CommonSettings, state: AgentState
 
 ## T (Tone)
     情感基调：根据内心独白和当前对话氛围决定。
-    {f"当前情感状态 (Redis): {emotional_state['current_mood']} (强度: {emotional_state['intensity']})" if emotional_state else ""}
+    {f"当前情感状态: {emotional_state['current_mood']} (强度: {emotional_state['intensity']})" if emotional_state else ""}
 
     ## I (Internal Monologue Synthesis)
 {os_text}

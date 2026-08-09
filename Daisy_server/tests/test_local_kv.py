@@ -249,3 +249,112 @@ class TestFakeredisIsGone:
         src = inspect.getsource(RedisClient.connect)
         assert "fakeredis" not in src, "连接分支仍在用 fakeredis"
         assert "LocalKV" in src
+
+
+class TestSetNxIsALock:
+    """
+    `nx=True`(SETNX)是**并发锁的原语**,chat_task 用 `lock:user:{id}` 保证
+    同一用户同时只跑一个对话任务。
+
+    第一版实现漏了这个参数,对话直接报
+    `LocalKVAsync.set() got an unexpected keyword argument 'nx'`。
+    它逃过了当时全部 428 个测试 —— 因为**没有一个测试真正跑过对话任务**,
+    而我统计调用点时只数了 `set(` 出现的次数,没看参数。是启动应用才发现的。
+    """
+
+    def test_second_acquire_fails(self):
+        async def go():
+            r = LocalKVAsync()
+            assert await r.set("lock:user:1", "1", nx=True, ex=600) is True
+            assert await r.set("lock:user:1", "1", nx=True, ex=600) is False, \
+                "锁能被重复获取 —— 同一用户会并发跑多个对话任务"
+        run(go())
+
+    def test_reacquire_after_release(self):
+        async def go():
+            r = LocalKVAsync()
+            await r.set("lock:user:1", "1", nx=True, ex=600)
+            await r.delete("lock:user:1")
+            assert await r.set("lock:user:1", "1", nx=True, ex=600) is True, \
+                "释放后拿不回锁 —— 用户会被永久挡住"
+        run(go())
+
+    def test_lock_expires(self):
+        """任务崩溃时锁必须能自己过期,否则用户永远发不出消息。"""
+        async def go():
+            r = LocalKVAsync()
+            await r.set("lock:user:1", "1", nx=True, ex=1)
+            await asyncio.sleep(1.05)
+            assert await r.set("lock:user:1", "1", nx=True, ex=600) is True
+        run(go())
+
+    def test_nx_does_not_affect_plain_set(self):
+        """普通 set 仍要能覆盖已有值。"""
+        async def go():
+            r = LocalKVAsync()
+            await r.set("k", "old")
+            await r.set("k", "new")
+            assert await r.get("k") == "new"
+        run(go())
+
+    def test_concurrent_acquire_only_one_wins(self):
+        """
+        检查与写入必须原子。分开做的话,两个并发请求可能同时判定"键不存在"
+        而都拿到锁 —— 那正是这把锁要防的事。
+        """
+        from app.core.local_kv import _STORE
+
+        _STORE.flushall()
+        results, barrier = [], threading.Barrier(8)
+
+        def worker():
+            barrier.wait()
+            results.append(_STORE.set("lock:user:1", "1", ex=600, nx=True))
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads: t.start()
+        for t in threads: t.join()
+        assert sum(1 for r in results if r) == 1, \
+            f"8 个并发请求里有 {sum(1 for r in results if r)} 个拿到了锁,应当只有 1 个"
+
+
+class TestUsedKwargsAreSupported:
+    """
+    "只实现用到的接口"是对的,但**必须真的把用到的都实现** ——
+    统计时要看参数,不能只数调用次数。这条测试直接扫源码里的实际调用。
+    """
+
+    def test_every_kwarg_at_call_sites_is_accepted(self):
+        import ast
+        import inspect
+        import os
+
+        server = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        used = set()
+        for dp, _, fs in os.walk(os.path.join(server, "app")):
+            if "__pycache__" in dp:
+                continue
+            for f in fs:
+                if not f.endswith(".py"):
+                    continue
+                path = os.path.join(dp, f)
+                tree = ast.parse(open(path, encoding="utf-8").read())
+                for node in ast.walk(tree):
+                    # 用 AST 而不是正则:第一版的 `[^)]*` 会跨进嵌套调用,
+                    # 把 json.dumps(..., ensure_ascii=False) 的参数也算进来。
+                    if not (isinstance(node, ast.Call)
+                            and isinstance(node.func, ast.Attribute)
+                            and node.func.attr == "set"):
+                        continue
+                    recv = ast.unparse(node.func.value)
+                    if "redis" not in recv:
+                        continue
+                    used |= {kw.arg for kw in node.keywords if kw.arg}
+
+        accepted = set(inspect.signature(LocalKVAsync.set).parameters)
+        # 门面用 ttl=,底层用 ex= —— 两者都算已支持
+        missing = used - accepted - {"ttl"}
+        assert not missing, (
+            f"调用点用了 {sorted(missing)},而 LocalKVAsync.set 不接受 —— "
+            f"运行时会抛 TypeError,而测试可能完全覆盖不到"
+        )
