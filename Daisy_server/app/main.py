@@ -17,7 +17,8 @@ from .core.logger import configure_logging, shutdown_logging
 from .services.persona.emotion import get_emotion_service
 from .services.memory.store import get_memory_service
 from .services.learning.rl_agent import get_rl_agent
-from .core.redis import redis_client, ARQClient
+from .core.cache import redis_client
+from .core.task_queue import ARQClient
 from .core.scheduler import scheduler_manager
 from .services.learning.reflexion_system import reflexion_system
 import uvicorn

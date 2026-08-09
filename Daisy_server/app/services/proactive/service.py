@@ -4,7 +4,7 @@ import structlog
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 from app.core.sse import build_protocol_event
-from app.core.redis import redis_client
+from app.core.cache import redis_client
 from app.services.proactive.state import StateService
 from app.services.memory.chat_history import history_service
 from app.models import UserDB

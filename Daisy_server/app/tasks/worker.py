@@ -4,7 +4,7 @@ from ..services.system.schema_bootstrap import init_db
 from ..core.database import SessionLocal
 from ..services.system.init_data import load_llm_providers_to_redis
 from ..services.system.init_data import init_personality_data
-from ..core.redis import redis_client
+from ..core.cache import redis_client
 from ..core.logger import configure_logging
 import structlog
 from .chat_task import chat_task

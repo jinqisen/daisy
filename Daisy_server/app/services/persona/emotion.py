@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.constants import EMOTION_TEXT_TRUNCATE_LIMIT, EMOTION_CACHE_TTL, EMOTION_TOP_K
 from app.core.utils import is_chinese
 from app.core.llm import get_llm_service # Import LLM service
-from app.core.redis import cache_result
+from app.core.cache import cache_result
 import re
 
 logger = structlog.get_logger()

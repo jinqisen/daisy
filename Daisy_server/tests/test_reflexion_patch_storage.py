@@ -33,7 +33,7 @@ def _make_patcher(tmp_path, suffix: str) -> ReflexionPatcher:
 
 
 async def _cleanup(patcher: ReflexionPatcher, user_ids):
-    from app.core.redis import redis_client
+    from app.core.cache import redis_client
     keys = [patcher.GLOBAL_KEY, patcher.MIGRATION_FLAG_KEY]
     keys += [patcher._personal_key(u) for u in user_ids]
     await redis_client.redis.delete(*keys)

@@ -83,7 +83,7 @@ class TestMetricsArePersisted:
         这正是"重启即归零"的等价场景。
         """
         from app.core.metrics_sink import KIND_LLM, record_metric
-        from app.core.redis import redis_client
+        from app.core.cache import redis_client
         from app.services.system.metrics_store import summarize
 
         record_metric(kind=KIND_LLM, route="FAST", model_name="m",

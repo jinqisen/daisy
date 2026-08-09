@@ -3,7 +3,7 @@ import structlog
 from typing import Tuple, List, Optional, Any
 import asyncio
 
-from app.core.redis import redis_client
+from app.core.cache import redis_client
 from app.core.config import settings
 from app.models import ChatHistoryDB
 from app.prompts import get_topic_summary_prompt, get_incremental_topic_summary_prompt, CommonSettings

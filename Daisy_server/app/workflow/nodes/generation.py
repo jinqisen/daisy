@@ -20,7 +20,7 @@ from ..capability import essential, enhancement
 from .state import AgentState
 from .tools import add_trace, get_common_settings_async, monitor_execution_time
 from ...core.exceptions import NodeError
-from ...core.redis import redis_client
+from ...core.cache import redis_client
 from ...services.learning.reflexion_system import reflexion_system
 from ...core.utils import is_offline_meetup_intent, is_offline_meetup_violation, split_response_into_parts
 from ...prompts import get_core_system_instructions

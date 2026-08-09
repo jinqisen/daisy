@@ -49,7 +49,7 @@ class TestGenerationUsesRealEmotion:
         """
         留着这两个方法,下一个人还会去调它 —— 而它永远返回默认值。
         """
-        src = open(os.path.join(SERVER, "app", "core", "redis.py"),
+        src = open(os.path.join(SERVER, "app", "core", "cache.py"),
                    encoding="utf-8").read()
         code = "\n".join(l for l in src.splitlines() if not l.strip().startswith("#"))
         assert "def get_emotional_state" not in code

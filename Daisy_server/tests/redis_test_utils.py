@@ -32,7 +32,7 @@ def probe_redis() -> bool:
 
 async def fresh_connect():
     """在当前事件循环内强制重建全局 redis_client 连接。"""
-    from app.core.redis import redis_client
+    from app.core.cache import redis_client
     try:
         if redis_client.redis is not None:
             await redis_client.redis.aclose()

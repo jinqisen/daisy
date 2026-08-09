@@ -2,7 +2,7 @@ import structlog
 from typing import Dict, Any
 from ..services.proactive.service import ProactiveService
 from ..services.proactive.state import StateService
-from ..core.redis import redis_client
+from ..core.cache import redis_client
 
 logger = structlog.get_logger()
 

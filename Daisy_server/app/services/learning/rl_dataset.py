@@ -64,7 +64,7 @@ async def record_decision(
     暂存本轮决策(context + action)。奖励要等下一轮用户反应才能算出,
     故先存 Redis,由 record_reward() 配对。
     """
-    from app.core.redis import redis_client
+    from app.core.cache import redis_client
 
     if not session_id:
         return
@@ -88,7 +88,7 @@ async def record_reward(session_id: str, reward: float, reward_reliable: bool = 
     用 Reflexion 算出的 S 作为奖励,与暂存的决策配对后落库。
     返回是否成功配对(无暂存决策时返回 False,属正常:如首轮或过期)。
     """
-    from app.core.redis import redis_client
+    from app.core.cache import redis_client
     from app.core.database import SessionLocal
     from app.models import RLSampleDB
 

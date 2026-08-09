@@ -4,7 +4,7 @@ from .config import settings
 from .constants import DEFAULT_LLM_TEMPERATURE
 from .database import SessionLocal
 from .llm_config import llm_config_manager
-from .redis import redis_client
+from .cache import redis_client
 from .metrics import estimate_tokens
 import structlog
 import threading
@@ -276,7 +276,7 @@ class LLMService:
         如果 Redis 中不存在，尝试从文件重新加载到 Redis (自愈逻辑)。
         """
         import json
-        from .redis import redis_client
+        from .cache import redis_client
         
         redis_key = f"system:llm:provider:{provider_name}"
         

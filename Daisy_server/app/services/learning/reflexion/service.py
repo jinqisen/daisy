@@ -3,7 +3,7 @@ import asyncio
 import structlog
 from typing import Dict, Any, Optional
 from datetime import datetime
-from app.core.redis import redis_client
+from app.core.cache import redis_client
 from app.core.database import SessionLocal
 from app.models import ReflexionLogDB, UserDB
 from app.agents.daisy.character_card import CharacterCard

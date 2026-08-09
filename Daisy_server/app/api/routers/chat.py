@@ -17,7 +17,8 @@ from app.api.deps import get_current_user, get_current_user_from_token_param
 from app.services.memory.chat_history import history_service
 from app.services.proactive.state import StateService
 from app.services.system.session import session_service
-from app.core.redis import redis_client, get_arq_pool
+from app.core.cache import redis_client
+from app.core.task_queue import get_arq_pool
 from app.core.utils import split_response_into_parts, group_chat_history_by_pairs
 
 logger = structlog.get_logger()

@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 import structlog
 
 from app.core.database import SessionLocal
-from app.core.redis import redis_client
+from app.core.cache import redis_client
 from app.core.time_utils import utc_now_naive
 from app.models import ChatHistoryDB
 

@@ -3,7 +3,7 @@ import json
 import time
 import asyncio
 from typing import Any, Callable, Optional, Union
-from .redis import redis_client
+from .cache import redis_client
 import structlog
 
 logger = structlog.get_logger()

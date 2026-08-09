@@ -244,7 +244,7 @@ class TestFakeredisIsGone:
         """
         import inspect
 
-        from app.core.redis import RedisClient
+        from app.core.cache import RedisClient
 
         src = inspect.getsource(RedisClient.connect)
         assert "fakeredis" not in src, "连接分支仍在用 fakeredis"

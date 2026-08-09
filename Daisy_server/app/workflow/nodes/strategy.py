@@ -5,7 +5,7 @@ from typing import Any, Callable
 from ..capability import essential, enhancement
 from ...core.config import settings
 from ...services.persona.strategy import get_strategy_service
-from ...core.redis import cache_result
+from ...core.cache import cache_result
 from ...core.exceptions import NodeError
 from .state import AgentState
 from .tools import add_trace, get_common_settings_async, monitor_execution_time

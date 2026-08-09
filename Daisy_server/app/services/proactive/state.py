@@ -2,7 +2,7 @@ import asyncio
 import datetime
 import json
 from typing import Optional, Dict, Any
-from app.core.redis import redis_client
+from app.core.cache import redis_client
 from app.core.time_utils import naive_utc_to_epoch
 import structlog
 

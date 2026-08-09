@@ -11,7 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.modules["app.core.database"] = MagicMock()
 sys.modules["app.services.memory.chat_history"] = MagicMock()
 sys.modules["app.models"] = MagicMock()
-sys.modules["app.core.redis"] = MagicMock()
+sys.modules["app.core.cache"] = MagicMock()
 sys.modules["app.agents.daisy.character_card"] = MagicMock()
 sys.modules["app.core.llm"] = MagicMock()
 

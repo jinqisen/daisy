@@ -11,7 +11,7 @@ from app.agents.daisy.character_card import CharacterCard
 from app.core.database import SessionLocal
 from app.models import ChatHistoryDB
 from app.core.utils import group_chat_history_by_pairs
-from app.core.redis import redis_client
+from app.core.cache import redis_client
 from app.core.config import settings
 from app.core.json_utils import parse_llm_json
 from app.core.constants import (

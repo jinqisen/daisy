@@ -58,7 +58,7 @@ class TestPipeline:
         monkeypatch.setattr(db_mod, "SessionLocal", db_factory)
 
         async def _main():
-            from app.core.redis import redis_client
+            from app.core.cache import redis_client
             from app.core.config import settings
             monkeypatch.setattr(settings, "EMBEDDED_MODE", True)
             await redis_client.connect()

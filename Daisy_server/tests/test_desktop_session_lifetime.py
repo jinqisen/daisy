@@ -82,7 +82,7 @@ class TestEmbeddedDispatchUsesMainLoop:
         main_loop = asyncio.get_running_loop()
         seen = {}
 
-        from app.core import redis as redis_mod
+        from app.core import task_queue as redis_mod
 
         class _Shim:
             async def enqueue_job(self, name, *a, **kw):

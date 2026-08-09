@@ -7,7 +7,7 @@ import structlog
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.core.redis import redis_client
+from app.core.cache import redis_client
 from app.models import UserDB, CommonSettingsDB, RoleProfileDB
 from app.prompts import CommonSettings, RoleProfile, get_system_prompt_generator_meta
 from app.api.deps import get_current_user

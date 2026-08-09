@@ -75,7 +75,7 @@ class SchedulerManager:
         if settings.EMBEDDED_MODE:
             # 嵌入模式:任务在进程内直接执行,必须跑在主循环上(见 __init__ 注释)。
             # 用 run_coroutine_threadsafe 从调度线程投递,而不是 asyncio.run 新建循环。
-            from .redis import _EmbeddedArqShim
+            from .task_queue import _EmbeddedArqShim
 
             if self._main_loop is None or self._main_loop.is_closed():
                 logger.error("Embedded dispatch skipped: main event loop unavailable.")

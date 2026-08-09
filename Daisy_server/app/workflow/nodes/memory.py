@@ -8,7 +8,7 @@ from ..capability import essential, enhancement
 from ...core.llm import get_llm_service
 from ...services.memory.store import get_memory_service
 from ...core.constants import MEMORY_SEARCH_MIN_WORDS, MEMORY_SEARCH_MIN_CHARS, RL_STATE_DIM
-from ...core.redis import redis_client
+from ...core.cache import redis_client
 from ...services.memory.chat_history import history_service
 from .state import AgentState
 from .tools import add_trace, get_common_settings_async, monitor_execution_time, sanitize_trace_payload

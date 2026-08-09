@@ -67,7 +67,7 @@ class ReflexionPatcher:
     async def _get_redis(self):
         """获取可用的 Redis 连接;不可用返回 None(调用方回退 JSONL)。"""
         try:
-            from app.core.redis import redis_client
+            from app.core.cache import redis_client
             if not redis_client.enabled:
                 await redis_client.connect()
             if redis_client.enabled and redis_client.redis:

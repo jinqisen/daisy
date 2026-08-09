@@ -301,7 +301,7 @@ class TestRedisIsCacheOnly:
     # 允许无 TTL 的写入(都是会话期状态,生命周期本就 ≤ 单次运行)。
     # 这是棘轮基线:只允许减少。
     ALLOWED_NO_TTL = {
-        "app/core/redis.py",           # 客户端自身的实现
+        "app/core/cache.py",           # 客户端自身的实现
         "app/services/system/init_data.py",  # 启动种子,随进程重建
         "app/services/memory/topic_agent.py",  # 已带 ttl,见下方正则说明
     }

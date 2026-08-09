@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 from ..core.sse import build_protocol_event
 from ..core.database import SessionLocal
-from ..core.redis import redis_client
+from ..core.cache import redis_client
 from ..core.utils import split_response_into_parts
 from ..models import ChatHistoryDB
 from ..workflow.graph import app_graph

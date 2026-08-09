@@ -53,7 +53,7 @@ class TestRedisFailsFastWithReadableReason:
         不设超时会走系统默认(实测 75 秒),表现为"启动卡住"而非报错 ——
         最难排查的那种失败。
         """
-        from app.core.redis import REDIS_CONNECT_TIMEOUT_SEC
+        from app.core.cache import REDIS_CONNECT_TIMEOUT_SEC
 
         assert 0 < REDIS_CONNECT_TIMEOUT_SEC <= 10, \
             f"连接超时 {REDIS_CONNECT_TIMEOUT_SEC}s 过长,启动会长时间无响应"
@@ -66,7 +66,12 @@ class TestRedisFailsFastWithReadableReason:
         (全库零使用者),这条断言就变成了在测**客户端数量**而不是它要守的性质。
         改成按实际的 from_url 调用数校验,以后增删客户端都不会误报或漏报。
         """
-        src = open(os.path.join(SERVER, "app", "core", "redis.py"), encoding="utf-8").read()
+        # 连接逻辑现在分在 core/cache.py(缓存)与 core/task_queue.py(任务队列),
+        # 两者曾同住一个名为 redis.py 的文件。
+        src = "".join(
+            open(os.path.join(SERVER, "app", "core", f), encoding="utf-8").read()
+            for f in ("cache.py", "task_queue.py")
+        )
         clients = src.count("from_url(")
         timeouts = src.count("socket_connect_timeout=REDIS_CONNECT_TIMEOUT_SEC")
         assert clients > 0, "没有找到任何 Redis 客户端构造点,这条测试已失效"
@@ -82,7 +87,7 @@ class TestRedisFailsFastWithReadableReason:
         """
         import inspect
 
-        from app.core.redis import RedisClient
+        from app.core.cache import RedisClient
 
         src = inspect.getsource(RedisClient.connect)
         assert "EMBEDDED_MODE" in src, \
@@ -101,7 +106,7 @@ class TestEmbeddedModeNeedsNoExternalService:
     @pytest.mark.asyncio
     async def test_embedded_redis_connects_without_network(self, monkeypatch):
         """嵌入模式下 Redis 必须立刻可用(进程内 fakeredis),不依赖任何网络。"""
-        from app.core import redis as redis_mod
+        from app.core import cache as redis_mod
         from app.core.config import settings
 
         monkeypatch.setattr(settings, "EMBEDDED_MODE", True)

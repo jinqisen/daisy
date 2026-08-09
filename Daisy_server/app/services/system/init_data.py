@@ -12,7 +12,7 @@ import json
 # 有 TTL 才符合"Redis 只做缓存、丢了能重建"这条收敛后的规则。
 PROVIDER_CACHE_TTL = 24 * 3600
 import structlog
-from app.core.redis import redis_client
+from app.core.cache import redis_client
 from app.core.llm_config import llm_config_manager
 from app.core.config import settings
 

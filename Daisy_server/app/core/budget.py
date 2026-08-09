@@ -17,7 +17,7 @@ from typing import Optional, Tuple
 import structlog
 
 from .config import settings
-from .redis import redis_client
+from .cache import redis_client
 
 logger = structlog.get_logger()
 

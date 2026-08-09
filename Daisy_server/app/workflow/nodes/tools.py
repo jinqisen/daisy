@@ -4,7 +4,7 @@ import hashlib
 import structlog
 from typing import Any, Dict
 from ...core.database import SessionLocal
-from ...core.redis import cache_result
+from ...core.cache import cache_result
 from ...models import WorkflowTraceDB, UserDB, CommonSettingsDB, ChatHistoryDB, RoleProfileDB
 from ...prompts import CommonSettings, RoleProfile
 from ...services.memory.chat_history import history_service
