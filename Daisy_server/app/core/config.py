@@ -113,151 +113,6 @@ def describe_config_sources(keys: List[str]) -> List[str]:
         lines.append(f"{k}={val} (来自 {src})")
     return lines
 
-def get_writable_data_dir() -> str:
-    """
-    可写数据根目录。
-
-    桌面打包(冻结)环境下,程序目录位于只读卷(.dmg / Applications),任何在包内
-    创建目录的写操作都会抛 OSError: Read-only file system。此函数统一给出可写位置:
-      - 冻结环境:DAISY_DATA_DIR(由 desktop_main 指向用户数据目录)
-      - 开发/server 部署:源码树 Daisy_server/(行为与原先一致)
-    """
-    override = os.environ.get("DAISY_DATA_DIR")
-    if override:
-        os.makedirs(override, exist_ok=True)
-        return override
-    return _base_dir
-
-
-def resolve_bundled_asset(configured_path: str) -> Optional[str]:
-    """
-    解析随程序分发的只读资源(如默认角色卡)的真实路径。
-
-    配置里写的是 "./Daisy_server/assets/..." 这类**相对 cwd** 的路径 —— 只有从仓库
-    根目录启动才成立。从 Daisy_server/ 启动、或打包成冻结程序(cwd 不确定,资源被
-    解包到 sys._MEIPASS)时都会找不到,表现为 "Failed to load any character card"。
-    这里按 cwd → 冻结解包目录 → 源码树 依次尝试,返回首个存在的路径。
-    """
-    if not configured_path:
-        return None
-
-    candidates = [configured_path]
-
-    # 去掉配置里的 "Daisy_server/" 前缀后,相对包根/解包根再试一次
-    rel = configured_path.lstrip("./")
-    for prefix in ("Daisy_server/", "Daisy_server" + os.sep):
-        if rel.startswith(prefix):
-            rel = rel[len(prefix):]
-            break
-
-    meipass = getattr(sys, "_MEIPASS", None)
-    if meipass:
-        candidates.append(os.path.join(meipass, rel))
-    candidates.append(os.path.join(_base_dir, rel))
-
-    for path in candidates:
-        if path and os.path.exists(path):
-            return path
-    return None
-
-
-def resolve_local_model(name: str) -> Optional[str]:
-    """
-    解析随包分发的本地模型目录,找不到返回 None(调用方回落到 HF Hub ID)。
-
-    为什么需要:模型原先都用 HuggingFace Hub ID 引用,运行时按需下载。开发机有缓存
-    所以从未暴露;而用户拿到的安装包是干净的 —— 第一次用到就要联网拉几百 MB 到 1GB,
-    期间功能卡住,断网或网络受限直接失败。模型改为在**构建期**拉取
-    (见 packaging/fetch_models.py),运行期只从本地读。
-    """
-    if not name:
-        return None
-    candidates = []
-    meipass = getattr(sys, "_MEIPASS", None)
-    if meipass:
-        candidates.append(os.path.join(meipass, "model", name))
-    candidates.append(os.path.join(_base_dir, "model", name))
-
-    for path in candidates:
-        if os.path.isdir(path):
-            # 只有确实含权重才算数,避免半途失败留下的空目录被当成可用模型
-            for root, _, files in os.walk(path):
-                if any(f.endswith((".safetensors", ".bin")) for f in files):
-                    return path
-    return None
-
-
-def load_whitelist() -> dict:
-    """
-    加载白名单配置。
-    返回一个包含 'users' (允许的用户名列表或对象列表) 和 'admins' (超级用户列表) 的字典。
-    """
-    try:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        whitelist_path = os.path.join(base_dir, "whitelist.json")
-        
-        if os.path.exists(whitelist_path):
-            with open(whitelist_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    # 向后兼容：所有用户视为普通用户，管理员硬编码或在其他地方处理
-                    return {"users": data, "admins": ["admin"]}
-                return data
-        return {"users": ["admin", "test_user"], "admins": ["admin"]}
-    except Exception as e:
-        # 使用标准日志记录，因为 structlog 可能尚未配置
-        logging.warning(f"Failed to load whitelist.json: {e}")
-        return {"users": ["admin", "test_user"], "admins": ["admin"]}
-
-def save_whitelist(data: dict) -> bool:
-    """
-    保存白名单配置到 whitelist.json。
-    """
-    try:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        whitelist_path = os.path.join(base_dir, "whitelist.json")
-        
-        with open(whitelist_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-        return True
-    except Exception as e:
-        logging.error(f"Failed to save whitelist.json: {e}")
-        return False
-
-def load_default_settings(user_gender: str = "male") -> dict:
-    """
-    加载默认的用户/角色通用设置。
-    从 default_settings.json 加载。
-    """
-    try:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        settings_path = os.path.join(base_dir, "default_settings.json")
-        
-        if os.path.exists(settings_path):
-            with open(settings_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                
-                # 检查是否是新的多模板结构
-                if user_gender in data:
-                    return data[user_gender]
-                
-                # 兼容旧的单层结构 (视为默认 male 模板)
-                if "name" in data:
-                     return data
-                     
-                # 如果找不到对应性别的模板，尝试使用 'male' 作为默认
-                if "male" in data:
-                    return data["male"]
-    except Exception as e:
-        logging.warning(f"Failed to load default_settings.json: {e}")
-        
-    # Minimal fallback to avoid crash, but encourages using the file
-    return {
-        "name": "Default",
-        "gender": "Unknown",
-        "core_system_prompt": "Please configure default_settings.json"
-    }
-
 from pydantic import Field, model_validator, ConfigDict
 
 class Settings(BaseSettings):
@@ -397,10 +252,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = Field("HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(30)
     
-    # 注册白名单
-    _whitelist_config = load_whitelist()
-    ALLOWED_USERS: List[Union[str, Dict]] = _whitelist_config.get("users", [])
-    SUPERUSERS: List[str] = _whitelist_config.get("admins", [])
+    # 注册白名单原先以 ALLOWED_USERS / SUPERUSERS 两个字段出现在这里,
+    # 在**类定义时**就调用 load_whitelist() 固化了内容。两个问题:全库零使用者,
+    # 且即便有人用,管理接口改完白名单后它们也不会更新。已移至
+    # services/system/whitelist.py —— 那是业务规则,不是基础设施。
 
     # Redis 配置
     REDIS_HOST: str = Field("localhost")

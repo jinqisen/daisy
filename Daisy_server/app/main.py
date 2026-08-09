@@ -198,7 +198,7 @@ app.include_router(metrics_router, prefix=f"{settings.API_V1_STR}/metrics", tags
 # 挂载静态文件目录
 import os
 # 冻结环境下包内只读,static 必须落在可写数据目录(见 config.get_writable_data_dir)
-from .core.config import get_writable_data_dir
+from .core.paths import get_writable_data_dir
 static_dir = os.path.join(get_writable_data_dir(), "static")
 if not os.path.exists(static_dir):
     os.makedirs(static_dir, exist_ok=True)

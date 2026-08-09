@@ -2,7 +2,8 @@ import os
 import json
 from typing import Optional
 import structlog
-from app.core.config import settings, resolve_bundled_asset
+from app.core.config import settings
+from app.core.paths import resolve_bundled_asset
 from app.agents.daisy.character_card import CharacterCard
 from app.core.database import SessionLocal
 from app.models import UserDB

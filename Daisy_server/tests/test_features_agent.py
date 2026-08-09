@@ -134,7 +134,7 @@ class TestDesktopMode:
     def test_writable_dir_override(self, monkeypatch, tmp_path):
         """打包后程序目录只读,可写数据必须能重定向。"""
         monkeypatch.setenv("DAISY_DATA_DIR", str(tmp_path))
-        from app.core.config import get_writable_data_dir
+        from app.core.paths import get_writable_data_dir
         assert get_writable_data_dir() == str(tmp_path)
 
     def test_desktop_entry_exists(self):

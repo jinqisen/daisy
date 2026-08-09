@@ -2,7 +2,8 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 import aiofiles
 import os
 import uuid
-from app.core.config import settings, get_writable_data_dir
+from app.core.config import settings
+from app.core.paths import get_writable_data_dir
 
 router = APIRouter()
 

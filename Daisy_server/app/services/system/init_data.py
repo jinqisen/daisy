@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.services.system.schema_bootstrap import init_db
-from app.core.config import load_default_settings
+from app.services.system.default_settings import load_default_settings
 from app.models import RoleProfileDB, CommonSettingsDB
 from app.prompts import RoleProfile, CommonSettings
 import os

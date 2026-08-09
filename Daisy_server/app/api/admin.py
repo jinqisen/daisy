@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from typing import List, Union, Optional
-from ..core.config import load_whitelist, save_whitelist
+from app.services.system.whitelist import load_whitelist, save_whitelist
 from ..models import UserDB
 from .deps import get_current_user
 import structlog

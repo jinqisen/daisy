@@ -30,7 +30,7 @@ class MetricsService:
             # 优先用随包分发的本地模型。原先直接写 HF Hub ID,运行时按需下载 ——
             # 开发机有缓存所以一直没暴露,而用户拿到的是干净的安装包,
             # 首次使用要联网拉 ~90MB,断网就直接失败。
-            from app.core.config import resolve_local_model
+            from app.core.paths import resolve_local_model
             model_ref = resolve_local_model("all-MiniLM-L6-v2") or "all-MiniLM-L6-v2"
             self._model = SentenceTransformer(model_ref)
             logger.info(f"MetricsService: Sentence-BERT model loaded from {model_ref}")

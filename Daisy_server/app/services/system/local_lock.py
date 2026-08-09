@@ -23,7 +23,7 @@ from typing import Optional
 import structlog
 
 from app.core import security
-from app.core.config import get_writable_data_dir
+from app.core.paths import get_writable_data_dir
 
 logger = structlog.get_logger()
 

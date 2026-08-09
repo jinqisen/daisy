@@ -8,7 +8,8 @@ import structlog
 import time
 import functools
 from typing import Any, Dict
-from .config import settings, get_writable_data_dir
+from .config import settings
+from .paths import get_writable_data_dir
 
 # 常量
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

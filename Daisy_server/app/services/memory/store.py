@@ -39,7 +39,7 @@ def _init_mem0_home() -> None:
          并用我们指定的目录建立 migrations_qdrant/history.db；
          若 reload 失败（极端情况），至少把模块全局 mem0_dir 强制覆盖。
     """
-    from app.core.config import get_writable_data_dir
+    from app.core.paths import get_writable_data_dir
 
     if not os.environ.get("MEM0_DIR"):
         target = os.path.join(get_writable_data_dir(), "mem0")
@@ -82,7 +82,8 @@ logging.getLogger("httpx").setLevel(logging.WARNING) # Suppress HTTP request log
 from mem0 import Memory
 from mem0.embeddings.openai import OpenAIEmbedding as _OpenAIEmbedding
 
-from app.core.config import settings, resolve_local_model
+from app.core.config import settings
+from app.core.paths import resolve_local_model
 from app.core.constants import MEMORY_LLM_MAX_TOKENS, MEMORY_LLM_TEMPERATURE
 from app.core.llm_config import llm_config_manager
 
@@ -121,7 +122,7 @@ def _history_db_path() -> str:
     readonly database"),而且用户数据散落到家目录隐藏文件夹也不合适 ——
     统一收进应用数据目录,与上传/日志/向量库同处一地,卸载时一并清理。
     """
-    from app.core.config import get_writable_data_dir
+    from app.core.paths import get_writable_data_dir
 
     base = os.path.join(get_writable_data_dir(), "mem0")
     os.makedirs(base, exist_ok=True)

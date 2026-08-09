@@ -17,7 +17,8 @@ from typing import Optional, Tuple
 import aiohttp
 import structlog
 
-from app.core.config import settings, resolve_bundled_asset
+from app.core.config import settings
+from app.core.paths import resolve_bundled_asset
 
 logger = structlog.get_logger()
 

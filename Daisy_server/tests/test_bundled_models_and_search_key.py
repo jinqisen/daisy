@@ -26,7 +26,7 @@ MODEL_DIR = os.path.join(REPO, "Daisy_server", "model")
 class TestModelsResolveLocally:
 
     def test_resolver_exists(self):
-        from app.core.config import resolve_local_model
+        from app.core.paths import resolve_local_model
         assert callable(resolve_local_model)
 
     def test_resolver_rejects_empty_dir(self, tmp_path, monkeypatch):
@@ -34,14 +34,14 @@ class TestModelsResolveLocally:
         半途失败会留下空目录。把空目录当成可用模型,只会让加载在更深处炸掉,
         错误信息离根因十万八千里。
         """
-        from app.core import config as cfg
+        from app.core import paths as cfg   # 路径解析已从 config 移到 paths
 
         monkeypatch.setattr(cfg, "_base_dir", str(tmp_path))
         (tmp_path / "model" / "ghost").mkdir(parents=True)
         assert cfg.resolve_local_model("ghost") is None
 
     def test_resolver_accepts_dir_with_weights(self, tmp_path, monkeypatch):
-        from app.core import config as cfg
+        from app.core import paths as cfg   # 路径解析已从 config 移到 paths
 
         monkeypatch.setattr(cfg, "_base_dir", str(tmp_path))
         d = tmp_path / "model" / "real"
@@ -203,7 +203,8 @@ class TestEmbeddingDimsMatchModel:
         """拿随包模型的 config.json 对账,这是唯一可信的事实来源。"""
         import json
 
-        from app.core.config import settings, resolve_local_model
+        from app.core.config import settings
+        from app.core.paths import resolve_local_model
 
         name = settings.EMBEDDING_MODEL_NAME.split("/")[-1]
         path = resolve_local_model(name)

@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from ..core import security
-from ..core.config import settings, load_whitelist, load_default_settings
+from ..core.config import settings
+from app.services.system.whitelist import load_whitelist
+from app.services.system.default_settings import load_default_settings
 from ..core.database import get_db, SessionLocal
 from ..models import UserDB, CommonSettingsDB, RoleProfileDB
 from ..services.system.init_data import INITIAL_PROFILES
