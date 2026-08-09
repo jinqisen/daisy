@@ -3,6 +3,7 @@ import json
 import structlog
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
+from app.core.time_utils import naive_utc_to_iso
 from app.core.sse import build_protocol_event
 from app.core.cache import redis_client
 from app.services.proactive.state import StateService
@@ -215,11 +216,11 @@ class ProactiveService:
                 event="proactive.message",
                 data={
                     "content": content,
-                    "timestamp": ai_msg.timestamp.isoformat(),
+                    "timestamp": naive_utc_to_iso(ai_msg.timestamp),
                 },
                 legacy_type="proactive_message",
                 content=content,
-                timestamp=ai_msg.timestamp.isoformat(),
+                timestamp=naive_utc_to_iso(ai_msg.timestamp),
             )
             await redis_client.redis.publish(channel, json.dumps(msg_payload))
             logger.info(f"Pushed proactive message to online user {user_id}")

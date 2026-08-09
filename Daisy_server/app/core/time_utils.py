@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from typing import Optional
 
 UTC = dt.timezone.utc
 
@@ -35,6 +36,24 @@ def naive_utc_to_epoch(value: dt.datetime) -> float:
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
     return value.timestamp()
+
+
+def naive_utc_to_iso(value: Optional[dt.datetime]) -> Optional[str]:
+    """
+    把库里的 naive UTC 时间序列化成**带时区标记**的 ISO 字符串,供接口返回。
+
+    **不要直接 `value.isoformat()`** —— 那会得到 `2026-08-09T04:41:18`,不带偏移。
+    浏览器的 `new Date("2026-08-09T04:41:18")` 会把它当作**本地时间**,
+    于是 UTC+8 的用户看到的每个时间都早 8 小时。
+
+    实测:一轮 12:41 的对话,分析面板上显示成 04:41。它不报错、不崩溃,
+    只是所有时间轴整体偏移一个时区 —— 又是"失败时不报错"那一类。
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.isoformat()
 
 
 def local_hour_of(value: dt.datetime) -> int:

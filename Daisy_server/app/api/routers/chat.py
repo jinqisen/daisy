@@ -9,6 +9,7 @@ import json
 import asyncio
 import time
 
+from app.core.time_utils import naive_utc_to_iso
 from app.core.sse import build_protocol_event, decode_pubsub_payload, encode_sse_message
 from app.core.database import get_db
 from app.core.time_utils import utc_now_naive
@@ -162,7 +163,8 @@ async def get_reflexion_history(
         
     return [
         {
-            "timestamp": log.timestamp,
+            # 必须带 UTC 标记 —— 裸 isoformat 会被浏览器当本地时间,整轴偏一个时区
+            "timestamp": naive_utc_to_iso(log.timestamp),
             "metrics": log.metrics,
             "session_id": log.session_id,
             "user_input": log.user_input,
@@ -296,7 +298,7 @@ async def chat(
             "data": {
                 "user_message_id": msg_id,
                 "session_id": session_id,
-                "timestamp": user_msg.timestamp.isoformat() if user_msg else utc_now_naive().isoformat()
+                "timestamp": naive_utc_to_iso(user_msg.timestamp) if user_msg else naive_utc_to_iso(utc_now_naive())
             }
         }
 
