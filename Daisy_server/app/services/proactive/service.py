@@ -153,12 +153,24 @@ class ProactiveService:
                 logger.error("No active agent found for user.")
                 return
 
-            # 构造上下文
+            # 构造上下文。**必须带上角色卡** —— 主动关心和主对话得是同一个人,
+            # 否则会出现"平时是静雯,主动开口变成另一个角色、甚至换种语言"。
+            common = None
+            try:
+                from app.models import CommonSettingsDB
+                row = (db.query(CommonSettingsDB)
+                         .filter(CommonSettingsDB.user_id == db_user_id)
+                         .first())
+                common = row
+            except Exception as e:
+                logger.warning(f"读取角色设定失败,主动关心将使用默认人设: {e}")
+
             context = {
                 "user_id": user_id,
                 "history": history_str,
                 "emotion": emotional_state if override else None,
-                "time": now
+                "time": now,
+                "common_settings": common,
             }
             
             # 调用 Agent 决策

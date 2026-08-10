@@ -83,6 +83,7 @@ for pkg in [
     "sqlalchemy", "pydantic", "pydantic_settings",
     # 角色卡等结构化输出的 JSON 容错解析(见 core/json_utils.py)
     "json_repair",
+    "openai",
 ]:
     try:
         d, b, h = collect_all(pkg)

@@ -258,7 +258,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = Field("INFO")
 
     # 安全
-    SECRET_KEY: str = Field("09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
+    SECRET_KEY: str = Field(""  # 首次启动时自动生成随机密钥;生产环境请通过环境变量 SECRET_KEY 设置)
     ALGORITHM: str = Field("HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(30)
     

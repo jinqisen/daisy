@@ -79,3 +79,6 @@ mem0_data/
 *.swp
 .dbg/
 .local/
+
+# 用户上传文件
+Daisy_server/static/uploads/

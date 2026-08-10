@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 from app.core.llm import get_llm_service
 from app.core.config import settings
+from app.core.paths import get_writable_data_dir
 
 logger = structlog.get_logger()
 
@@ -34,7 +35,7 @@ class ReflexionPatcher:
     CACHE_TTL_SEC = 30
 
     def __init__(self):
-        self.patches_file = os.path.join(settings.DATA_DIR if hasattr(settings, 'DATA_DIR') else "data", "reflexion_patches.jsonl")
+        self.patches_file = os.path.join(settings.DATA_DIR if hasattr(settings, 'DATA_DIR') else get_writable_data_dir(), "reflexion_patches.jsonl")
         self._ensure_file_exists()
         # user_id -> (cached_at_ts, patches_dict)
         self._cache: Dict[Any, Tuple[float, Dict[str, List[str]]]] = {}

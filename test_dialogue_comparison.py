@@ -1,4 +1,5 @@
 import asyncio
+import os
 import httpx
 import json
 from typing import List, Dict, Any
@@ -15,7 +16,11 @@ class DialogueTestClient:
 
 
 class DaisyServerClient(DialogueTestClient):
-    def __init__(self, base_url: str, username: str = "jinqisen", password: str = "Hello!2025"):
+    def __init__(self, base_url: str, username: str = None, password: str = None):
+        if username is None:
+            username = os.environ.get("DAISY_TEST_USERNAME", "test_user")
+        if password is None:
+            password = os.environ.get("DAISY_TEST_PASSWORD", "test_password")
         super().__init__(base_url)
         self.username = username
         self.password = password

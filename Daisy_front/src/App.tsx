@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Row, Col, Typography, theme, Tabs, Dropdown, Space, message as antdMessage, Drawer, Button, Spin, Result } from 'antd';
+import { Layout, Row, Col, Typography, theme, Tabs, Dropdown, Space, message as antdMessage, notification, Drawer, Button, Spin, Result, Alert } from 'antd';
 import { UserOutlined, LogoutOutlined, KeyOutlined, DownOutlined, PartitionOutlined, BarChartOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import ChatInterface from './components/ChatInterface';
@@ -99,6 +99,9 @@ const App: React.FC = () => {
   // 本地会话请求去重:StrictMode 双挂载 / 竞态重试都可能并发触发,
   // 若不去重会重复建会话并反复触发后台角色卡生成(日志刷屏)。
   const localSessionInFlight = useRef<Promise<any> | null>(null);
+  // 后台初始化状态轮询（/api/status）
+  const [initStatus, setInitStatus] = useState<{phase: string; progress: string; errors: string[]} | null>(null);
+  const initErrorsShown = useRef<Set<string>>(new Set());
 
   // 后端就绪状态机。
   //
@@ -125,6 +128,52 @@ const App: React.FC = () => {
         localStorage.removeItem('token');
     }
   }, [token]);
+
+  // 桌面版：轮询后台初始化状态，展示进度并在失败时弹窗
+  useEffect(() => {
+    if (!token || !isDesktopMode) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const poll = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/api/status`);
+        if (cancelled) return;
+        const status = res.data;
+        setInitStatus(status);
+
+        // 弹窗展示尚未提示过的错误
+        if (status.errors?.length > 0) {
+          for (const err of status.errors) {
+            if (!initErrorsShown.current.has(err)) {
+              initErrorsShown.current.add(err);
+              notification.error({
+                message: '初始化失败',
+                description: err,
+                duration: 0, // 不自动关闭，用户手动关闭
+                placement: 'topRight',
+              });
+            }
+          }
+        }
+
+        if (status.phase === 'done' || status.phase === 'error') {
+          return; // 初始化结束，停止轮询
+        }
+      } catch (_e) {
+        // 轮询失败不阻塞，下次重试
+      }
+      if (!cancelled) {
+        timer = setTimeout(poll, 1500);
+      }
+    };
+
+    poll();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [token, isDesktopMode]);
 
   useEffect(() => {
       if (username) {
@@ -583,6 +632,15 @@ const App: React.FC = () => {
 
   return (
     <Layout style={{ height: '100vh', overflow: 'hidden' }}>
+      {initStatus && initStatus.phase === 'running' && (
+        <Alert
+          type="info"
+          showIcon
+          message={initStatus.progress || '正在初始化...'}
+          banner
+          style={{ borderRadius: 0 }}
+        />
+      )}
       <style>
         {`
           .full-height-tabs {

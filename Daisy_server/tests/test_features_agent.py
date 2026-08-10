@@ -67,13 +67,68 @@ class TestProactive:
         src = (SERVER / "app" / "core" / "scheduler.py").read_text(encoding="utf-8")
         assert "proactive_check_cron" in src
 
-    def test_proactive_prompt_json_braces_escaped(self):
+    def test_proactive_prompt_renders_with_json_example(self):
         """
         该 prompt 内含 JSON 示例。曾因 f-string 未转义花括号而使主动关怀 100% 崩溃
-        (Invalid format specifier)。锁定不再回归。
+        (Invalid format specifier)。
+
+        提示词已迁到 Daisy_prompts 的 Jinja2 模板,f-string 转义不再适用,
+        但**风险仍在** —— Jinja2 同样用花括号,写错会把 JSON 示例吃掉或报错。
+        所以改成直接渲染:比检查源码里有没有 `{{` 强得多,它验证的是
+        "这个 prompt 真的能用",而不是"它长得像转义过"。
+        """
+        import os
+
+        os.environ.setdefault("DAISY_PROMPTS_DIR",
+                              str(SERVER.parent / "Daisy_prompts"))
+        from app.core.prompt_loader import PromptLoader
+
+        out = PromptLoader.get_instance().render(
+            "get_proactive_trigger_prompt",
+            persona_name="静雯", persona_gender="女性", relationship="Confidant",
+            backstory="背景", current_time="17:24",
+            emotion_desc="无明显情绪波动", history_str="user: 你好",
+        )
+        assert out and out.strip(), "主动关心提示词渲染为空"
+        # JSON 示例必须完整活下来,否则模型不知道该输出什么结构
+        for token in ('"score"', '"reason"', '"content"', "{", "}"):
+            assert token in out, f"JSON 示例被模板引擎吃掉了: 缺 {token}"
+        # 渲染后不该残留未替换的占位符
+        assert "{{" not in out, f"存在未替换的模板变量: {out[:200]}"
+
+    def test_proactive_prompt_carries_persona_and_language(self):
+        """
+        实测缺陷:主动关心发出的是**英文**消息,且自称 "Daisy" ——
+        提示词整段英文、写死角色名、完全不读角色卡。
+        一个中文人设的陪伴角色,唯独在主动开口时不像本人。
+        """
+        import os
+
+        os.environ.setdefault("DAISY_PROMPTS_DIR",
+                              str(SERVER.parent / "Daisy_prompts"))
+        from app.core.prompt_loader import PromptLoader
+
+        out = PromptLoader.get_instance().render(
+            "get_proactive_trigger_prompt",
+            persona_name="静雯", persona_gender="女性", relationship="Confidant",
+            backstory="你出生于一个江南小镇", current_time="17:24",
+            emotion_desc="无明显情绪波动", history_str="user: 今天有点累",
+        )
+        assert "静雯" in out, "提示词没有带上角色名 —— 会自称成别的名字"
+        assert "你出生于一个江南小镇" in out, "提示词没有带上角色背景"
+        assert "Daisy" not in out, "仍写死了 Daisy —— 与实际角色不符"
+        assert "语言" in out, "没有语言要求 —— 实测会发出英文消息"
+
+    def test_prompt_is_not_hardcoded_in_code(self):
+        """
+        其余 14 个提示词都在 Daisy_prompts 统一管理,唯独这个硬编码在代码里,
+        既绕过了版本管理,也让"改一句话要改代码"。
         """
         src = (SERVER / "app" / "agents" / "daisy" / "agent.py").read_text(encoding="utf-8")
-        assert '{{' in src and '}}' in src, "JSON 示例的花括号未转义,f-string 会抛 Invalid format specifier"
+        # 只看可执行代码 —— 注释里会引用这句原文来解释当初的缺陷
+        code = "\n".join(l for l in src.splitlines() if not l.strip().startswith("#"))
+        assert "You are Daisy" not in code, "主动关心的提示词仍硬编码在代码里"
+        assert "get_proactive_trigger_prompt" in code
 
 
 # --- 九、可观测性与成本控制 ---

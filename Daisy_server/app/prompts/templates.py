@@ -289,6 +289,39 @@ def get_strategy_selection_prompt(context_text: str, top_emotions: list) -> str:
 def get_memory_search_query_system_prompt() -> str:
     return "你是一个搜索查询优化器。"
 
+def get_proactive_trigger_prompt(
+    persona_name: str,
+    persona_gender: str = "",
+    relationship: str = "",
+    backstory: str = "",
+    current_time: str = "",
+    emotion_desc: str = "",
+    history_str: str = "",
+) -> str:
+    """
+    主动关心的判定/生成提示词。
+
+    原先这段提示词**硬编码在 agents/daisy/agent.py 里**,而且:
+      - 整段英文且没有语言要求 —— 实测发出的主动消息是英文,
+        而角色是中文人设(静雯),用户也一直用中文;
+      - 写死 "You are Daisy",与实际角色名不符;
+      - 完全不带角色卡与人格 —— 主对话链路精心构建的人设、关系、背景
+        在这条路径上一点没用上。
+
+    结果是:**唯一会主动开口的功能,恰恰最不像那个角色。**
+    """
+    return PromptLoader.get_instance().render(
+        "get_proactive_trigger_prompt",
+        persona_name=persona_name,
+        persona_gender=persona_gender,
+        relationship=relationship,
+        backstory=backstory,
+        current_time=current_time,
+        emotion_desc=emotion_desc,
+        history_str=history_str,
+    )
+
+
 def get_memory_search_query_prompt(text: str, topic_summary: str = None) -> str:
     return PromptLoader.get_instance().render(
         "get_memory_search_query_prompt",

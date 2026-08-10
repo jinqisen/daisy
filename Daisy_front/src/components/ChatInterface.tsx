@@ -110,20 +110,39 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ token, onUnauthorized, on
     return true; 
   };
 
-  useEffect(() => {
-    // Initial check
-    checkCharacterStatus();
-    
-    // Poll if not ready
-    const timer = setInterval(async () => {
-        const ready = await checkCharacterStatus();
-        if (ready) {
-             // Keep polling? Maybe less frequently.
-             // For now, let's keep checking to detect status changes (e.g. evolving)
-        }
-    }, 3000); 
+  // 角色卡状态轮询。这里的节奏是**按需要变的**,不是固定 3 秒:
+  //
+  //   未就绪 → 3 秒:此时用户正盯着"生成中"的遮罩等,要尽快解除。
+  //   已就绪 → 30 秒:只为兜住"人格编辑器触发重新生成"这种少见情况。
+  //   页面不可见 → 跳过:桌面版会一直开着,后台空转纯属浪费。
+  //
+  // 原实现固定 3 秒且**就绪后也不停**(注释里写着 "Keep polling? Maybe less
+  // frequently. // For now, let's keep checking"),实测一次会话打出 580 次
+  // /api/config/common —— 每小时 1200 次,每次都查库,而它要等的那个事件
+  // 一辈子只发生一次(首次运行生成角色卡)。
+  const READY_POLL_MS = 30000;
+  const PENDING_POLL_MS = 3000;
 
-    return () => clearInterval(timer);
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const tick = async () => {
+      // 页面在后台时不发请求,但仍按已就绪的节奏重新排期,
+      // 这样切回前台最多等一个周期,不需要额外的可见性监听。
+      let ready = true;
+      if (!document.hidden) {
+        ready = await checkCharacterStatus();
+      }
+      if (cancelled) return;
+      timer = setTimeout(tick, ready ? READY_POLL_MS : PENDING_POLL_MS);
+    };
+
+    tick();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, []);
   
   const startTimeRef = useRef<number>(Date.now());
