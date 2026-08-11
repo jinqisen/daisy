@@ -140,22 +140,22 @@ class Settings(BaseSettings):
     # Removed unused configs
     
     # Embedding Configuration
-    EMBEDDING_PROVIDER: str = Field("siliconflow")
-    EMBEDDING_MODEL_NAME: str = Field("BAAI/bge-small-zh-v1.5")
+    EMBEDDING_PROVIDER: str = Field("openai_compatible")
+    EMBEDDING_MODEL_NAME: str = Field("text-embedding-3-small")
 
     # 嵌入向量维度。必须与 EMBEDDING_MODEL_NAME 实际输出一致 ——
     # 不一致时 Qdrant 会拒绝写入,长期记忆静默失效。
     # bge-small-zh-v1.5 = 512;bge-large-zh-v1.5 / bge-m3 = 1024。
     # 换模型时**务必同步改这里**,并清空已有向量库(旧向量维度不兼容)。
-    EMBEDDING_DIMS: int = Field(512)
+    EMBEDDING_DIMS: int = Field(1536)
     
     # LLM Default Configuration
-    DEFAULT_LLM_PROVIDER: str = Field("huaweicloud")
-    DEFAULT_LLM_BASE_URL: str = Field("https://api.modelarts-maas.com/v1")
-    DEFAULT_LLM_MODEL_NAME: str = Field("deepseek-v3.2")
+    DEFAULT_LLM_PROVIDER: str = Field("openai_compatible")
+    DEFAULT_LLM_BASE_URL: str = Field("https://api.openai.com/v1")
+    DEFAULT_LLM_MODEL_NAME: str = Field("gpt-4o")
     
     # Lightweight Model Configuration (For Router/ReAct)
-    LIGHTWEIGHT_LLM_MODEL_NAME: str = Field(None)
+    LIGHTWEIGHT_LLM_MODEL_NAME: str = Field("gpt-4o-mini")
     STANDARD_LLM_MODEL_NAME: Optional[str] = Field(None)
     DEEP_LLM_MODEL_NAME: Optional[str] = Field(None)
     DEEP_FINAL_TIMEOUT_SEC: int = Field(25)
@@ -284,6 +284,10 @@ class Settings(BaseSettings):
     SILICONFLOW_API_KEY: Optional[str] = Field(None)
     MAAS_API_KEY: Optional[str] = Field(None)
     OPENAI_API_KEY: Optional[str] = Field(None)
+    
+    # OpenAI 兼容接口配置（用户可自定义任意第三方服务）
+    OPENAI_BASE_URL: Optional[str] = Field(None)
+    LLM_MODEL_NAME: Optional[str] = Field(None)
     
     # 直接在 Settings 中添加字段，不强制绑定到环境变量，通过 __init__ 逻辑处理
     HUAWEI_SEARCH_API_KEY: Optional[str] = Field(None)

@@ -115,9 +115,8 @@ class LLMService:
         if not is_auth:
             return
         try:
-            from .llm_config import PROVIDER_KEY_ENVS, mark_key_invalid
-            provider = (provider_config or {}).get("provider") or settings.DEFAULT_LLM_PROVIDER
-            env_name = PROVIDER_KEY_ENVS.get(provider)
+            from .llm_config import mark_key_invalid, OPENAI_API_KEY_ENV
+            env_name = OPENAI_API_KEY_ENV
             if env_name:
                 mark_key_invalid(env_name)
         except Exception:

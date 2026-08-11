@@ -14,6 +14,7 @@ Daisy 是一个基于大语言模型的 AI 伴侣系统，具备长期记忆、�
 - **🔒 隐私优先** — 所有数据存储在本地，不依赖云端
 - **🖥️ 桌面应用** — 原生 macOS 应用（基于 Electron），开箱即用
 - **🐳 Docker 部署** — 支持 server 模式部署，多用户访问
+- **🔌 OpenAI 兼容** — 兼容所有 OpenAI 接口标准的第三方服务
 
 ## 架构概览
 
@@ -50,7 +51,11 @@ Daisy_Demo/
 
 1. 下载最新的 `Daisy-*.dmg` 从 [Releases](https://github.com/jinqisen/daisy/releases)
 2. 双击安装，拖入 Applications
-3. 首次打开时，输入你的 LLM API Key（华为云 / 硅基流动 / OpenAI）
+3. 首次打开时，配置你的 LLM：
+   - 选择预设模板（OpenAI / DeepSeek / 硅基流动 / 通义千问 等），或手动输入
+   - 填入 **Base URL**（接口地址）
+   - 填入 **API Key**（密钥）
+   - 填入 **模型名称**（如 gpt-4o、deepseek-chat）
 4. 开始对话
 
 ### 从源码运行（开发模式）
@@ -69,7 +74,7 @@ cd daisy
 cd Daisy_server
 pip install -r requirements.txt
 cp ../.env.example .env
-# 编辑 .env，填入你的 LLM API Key
+# 编辑 .env，填入你的 LLM 配置
 python -m app.main
 
 # 前端（另一个终端）
@@ -82,7 +87,7 @@ npm run dev
 
 ```bash
 cp .env.example Daisy_server/.env
-# 编辑 Daisy_server/.env，填入 LLM API Key
+# 编辑 Daisy_server/.env，填入 LLM 配置
 docker-compose up -d
 ```
 
@@ -90,15 +95,28 @@ docker-compose up -d
 
 ## 配置 LLM
 
-Daisy 不内置任何 API Key。你需要至少配置一个 LLM 提供商：
+Daisy 采用 **OpenAI 兼容接口**，兼容所有提供 OpenAI 兼容 API 的服务商。
 
-| 提供商 | 环境变量 | 申请地址 |
-|--------|---------|---------|
-| 华为云 ModelArts | `MAAS_API_KEY` | [console.huaweicloud.com](https://console.huaweicloud.com/modelarts/) |
-| 硅基流动 | `SILICONFLOW_API_KEY` | [siliconflow.cn](https://cloud.siliconflow.cn/account/ak) |
-| OpenAI | `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com/api-keys) |
+你只需配置三项：
 
-在桌面版中，首次启动会自动弹出配置界面；server 部署请在 `.env` 中设置。
+| 配置项 | 说明 | 示例 |
+|--------|------|------|
+| `OPENAI_BASE_URL` | 接口地址 | `https://api.openai.com/v1` |
+| `OPENAI_API_KEY` | API 密钥 | `sk-...` |
+| `LLM_MODEL_NAME` | 模型名称 | `gpt-4o` |
+
+### 常用服务商快速参考
+
+| 服务商 | Base URL | 模型示例 |
+|--------|----------|---------|
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o` |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
+| 硅基流动 | `https://api.siliconflow.cn/v1` | `Pro/deepseek-ai/DeepSeek-V3.2` |
+| 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` |
+| 智谱 GLM | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash` |
+| Moonshot | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
+
+在桌面版中，首次启动会自动弹出配置界面，可选择预设模板快速填充；server 部署请在 `.env` 中设置。
 
 ## 项目文档
 

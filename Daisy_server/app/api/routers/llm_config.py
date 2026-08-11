@@ -1,15 +1,11 @@
 """
-LLM 服务商与密钥的配置接口。
+LLM 配置 API 端点 —— 统一 OpenAI 兼容接口。
 
-从原来的 config.py(431 行、11 个端点、三类关注点)拆出。
-三类东西唯一的共同点只是都挂在 /config 前缀下 —— 那是 URL 结构,不是内聚性。
-
-**URL 路径保持不变**:三个 router 仍以同一前缀挂载,前端无需改动。
+用户配置：Base URL + API Key + 模型名，适配所有 OpenAI 兼容服务商。
 """
 
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
-from sqlalchemy.orm import Session
-from typing import Dict, List, Any
+from fastapi import APIRouter, HTTPException, Depends
+from typing import Dict, Any
 import json
 import os
 import structlog
@@ -17,88 +13,54 @@ import structlog
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.cache import redis_client
-from app.models import UserDB, CommonSettingsDB, RoleProfileDB
-from app.prompts import CommonSettings, RoleProfile, get_system_prompt_generator_meta
+from app.models import UserDB
 from app.api.deps import get_current_user
-from app.core.llm import get_llm_service
-from app.services.dialogue.generation import generate_character_portrait_async, generate_deep_character_card
 
 logger = structlog.get_logger()
 router = APIRouter()
 
-@router.get("/providers")
-async def get_llm_providers():
-    """
-    获取可用的 LLM 提供商列表。
-    """
-    # app/api/routers/config.py -> app/api/routers -> app/api -> app -> Daisy_server
-    from app.core.paths import SERVER_DIR
-    base_dir = SERVER_DIR
-    config_path = os.path.join(base_dir, "llm_providers.json")
-    
-    if not os.path.exists(config_path):
-        logger.warning(f"LLM providers config not found at {config_path}")
-        return {}
-        
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            file_providers = json.load(f)
-            
-        result_providers = {}
-        
-        for pid in file_providers.keys():
-            redis_key = f"system:llm:provider:{pid}"
-            try:
-                cached = await redis_client.get(redis_key)
-                if cached:
-                    provider_data = json.loads(cached)
-                    if "api_key" in provider_data:
-                        del provider_data["api_key"]
-                    result_providers[pid] = provider_data
-                else:
-                    result_providers[pid] = file_providers[pid]
-            except Exception as e:
-                logger.error(f"Error fetching provider {pid} from Redis: {e}")
-                result_providers[pid] = file_providers[pid]
-                
-        return result_providers
-
-    except Exception as e:
-        logger.error(f"Failed to load LLM providers config: {e}")
-        return {}
-
-
-# ---- 系统级 LLM 密钥(本地 C 端:用户自填密钥)----
-# 用户级 llm_api_key 只作用于最终生成;流水线内多个 agent(router/记忆/策略/话题/画像/
-# reflexion)用系统默认 provider,其 key 来自 env。故需要一个系统级入口:把用户填的 key
-# 注入 env + 持久化到用户配置文件 + 热重载 provider,使全链路都能用。
-
-# provider 环境变量名映射(与 llm_providers.json 的 api_key_env 一致)
-_KEY_ENV_NAMES = ["MAAS_API_KEY", "SILICONFLOW_API_KEY", "OPENAI_API_KEY", "HUAWEI_SEARCH_API_KEY"]
+# 统一密钥环境变量名
+_KEY_ENV_NAMES = ["OPENAI_API_KEY", "OPENAI_BASE_URL", "LLM_MODEL_NAME", "HUAWEI_SEARCH_API_KEY"]
 
 
 def _user_config_path() -> str:
-    """密钥持久化目标:优先 DAISY_CONFIG_PATH(桌面版指向用户目录),否则源码树。"""
+    """密钥持久化目标：优先 DAISY_CONFIG_PATH（桌面版指向用户目录），否则源码树。"""
     p = os.environ.get("DAISY_CONFIG_PATH")
     if p:
         return p
     from app.core.paths import SERVER_DIR
-    base_dir = SERVER_DIR
-    return os.path.join(base_dir, "server_config.json")
+    return os.path.join(SERVER_DIR, "server_config.json")
+
+
+@router.get("/providers")
+async def get_llm_providers():
+    """
+    返回当前 LLM 配置状态（base_url + model_name + 密钥是否已配置）。
+    不再返回服务商列表 —— 用户自行输入。
+    """
+    from app.core.llm_config import llm_config_status, OPENAI_API_KEY_ENV, OPENAI_BASE_URL_ENV, LLM_MODEL_NAME_ENV
+
+    status = llm_config_status()
+    return {
+        "configured": status["configured"],
+        "has_invalid_key": status["has_invalid_key"],
+        "invalid_keys": status["invalid_keys"],
+        "base_url": os.environ.get(OPENAI_BASE_URL_ENV, ""),
+        "model_name": os.environ.get(LLM_MODEL_NAME_ENV, ""),
+        "has_api_key": bool(os.environ.get(OPENAI_API_KEY_ENV)),
+    }
 
 
 @router.get("/llm_keys")
 async def get_llm_keys(current_user: UserDB = Depends(get_current_user)):
-    """返回各密钥是否已配置(不回传明文)。"""
+    """返回各密钥是否已配置（不回传明文）。"""
     return {name: bool(os.environ.get(name)) for name in _KEY_ENV_NAMES}
 
 
 @router.get("/llm_status")
 async def get_llm_status(current_user: UserDB = Depends(get_current_user)):
     """
-    LLM 配置状态摘要(不含密钥明文)。前端据此判断:
-    角色卡缺失时究竟是"正在生成"还是"尚未配置模型" —— 后者应引导用户去填 API Key,
-    而不是显示无限加载。任何已登录用户可访问(桌面版普通用户也需要能完成首次配置)。
+    LLM 配置状态摘要（不含密钥明文）。
     """
     from app.core.llm_config import llm_config_status
     return llm_config_status()
@@ -107,38 +69,56 @@ async def get_llm_status(current_user: UserDB = Depends(get_current_user)):
 @router.post("/llm_keys")
 async def set_llm_keys(payload: Dict[str, str], current_user: UserDB = Depends(get_current_user)):
     """
-    设置系统级 LLM 密钥(用户自填)。持久化到用户配置文件 + 注入 env + 热重载 provider,
-    无需重启即生效于全链路。payload 例:{"MAAS_API_KEY": "...", "SILICONFLOW_API_KEY": "..."}
+    设置 LLM 配置。
+
+    接收字段：
+    - OPENAI_API_KEY: API 密钥
+    - OPENAI_BASE_URL: 接口地址（如 https://api.openai.com/v1）
+    - LLM_MODEL_NAME: 模型名称（如 gpt-4o、deepseek-v3.2）
+    - HUAWEI_SEARCH_API_KEY: 联网搜索密钥（可选）
+
+    保存前探活验证，只有明确认证失败才拒绝。
     """
     from app.services.system.init_data import load_llm_providers_to_redis
-
-    updates = {k: v for k, v in payload.items() if k in _KEY_ENV_NAMES and isinstance(v, str) and v.strip()}
-    if not updates:
-        raise HTTPException(status_code=400, detail="No valid keys provided")
-
-    # 0. 保存前探活。原本照单全收 —— 填错服务的密钥也会落盘,要等第一次对话
-    #    失败才暴露,而那时的表现是"角色卡一直生成中",用户根本联想不到是密钥
-    #    填错了槽位(实测:一把搜索密钥被填进了聊天密钥的位置)。
-    #    只有**明确的认证失败**才拒绝;超时/限流/断网一律放行,否则离线场景配不上。
     from app.services.system.key_verification import verify_key, VALID, INVALID
 
+    # 允许的字段
+    allowed_keys = {"OPENAI_API_KEY", "OPENAI_BASE_URL", "LLM_MODEL_NAME", "HUAWEI_SEARCH_API_KEY"}
+
+    updates = {k: v for k, v in payload.items() if k in allowed_keys and isinstance(v, str) and v.strip()}
+    if not updates:
+        raise HTTPException(status_code=400, detail="未提供有效的配置项")
+
     verdicts = {}
-    for name, value in updates.items():
-        status, reason = await verify_key(name, value)
-        verdicts[name] = {"status": status, "reason": reason}
-        logger.info(f"Key probe {name}: {status} ({reason})")
 
-    rejected = {k: v["reason"] for k, v in verdicts.items() if v["status"] == INVALID}
-    if rejected:
-        detail = "；".join(f"{k}: {r}" for k, r in rejected.items())
-        raise HTTPException(status_code=400, detail=detail)
+    # 验证 API Key（如果有）
+    api_key = updates.get("OPENAI_API_KEY")
+    if api_key:
+        # 验证时传递用户提供的 base_url 和 model_name
+        base_url = updates.get("OPENAI_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or ""
+        model_name = updates.get("LLM_MODEL_NAME") or os.environ.get("LLM_MODEL_NAME") or "gpt-4o"
+        status, reason = await verify_key("OPENAI_API_KEY", api_key, base_url, model_name)
+        verdicts["OPENAI_API_KEY"] = {"status": status, "reason": reason}
+        logger.info(f"Key probe OPENAI_API_KEY: {status} ({reason})")
 
-    # 1. 注入进程环境(立即对 load_llm_providers_to_redis 生效)
+        rejected = {k: v["reason"] for k, v in verdicts.items() if v["status"] == INVALID}
+        if rejected:
+            detail = "；".join(f"{k}: {r}" for k, r in rejected.items())
+            raise HTTPException(status_code=400, detail=detail)
+
+    # 验证搜索密钥（如果有）
+    search_key = updates.get("HUAWEI_SEARCH_API_KEY")
+    if search_key:
+        status, reason = await verify_key("HUAWEI_SEARCH_API_KEY", search_key, "", "")
+        verdicts["HUAWEI_SEARCH_API_KEY"] = {"status": status, "reason": reason}
+        if status == INVALID:
+            raise HTTPException(status_code=400, detail=f"HUAWEI_SEARCH_API_KEY: {reason}")
+
+    # 1. 注入进程环境
     for k, v in updates.items():
         os.environ[k] = v.strip()
 
-    # 1b. 同步更新 settings 单例:settings 是启动时快照,部分模块(如 memory 的
-    # embedder)直接读它;不同步会导致这些模块拿不到运行期填入的密钥。
+    # 2. 同步更新 settings 单例
     for k, v in updates.items():
         if hasattr(settings, k):
             try:
@@ -146,7 +126,19 @@ async def set_llm_keys(payload: Dict[str, str], current_user: UserDB = Depends(g
             except Exception as e:
                 logger.warning(f"Failed to sync {k} into settings: {e}")
 
-    # 2. 持久化到用户配置文件(重启后由 config 启动逻辑重新加载)
+    # 同步 OPENAI_BASE_URL 和 LLM_MODEL_NAME
+    if "OPENAI_BASE_URL" in updates:
+        try:
+            settings.OPENAI_BASE_URL = updates["OPENAI_BASE_URL"].strip()
+        except Exception:
+            pass
+    if "LLM_MODEL_NAME" in updates:
+        try:
+            settings.LLM_MODEL_NAME = updates["LLM_MODEL_NAME"].strip()
+        except Exception:
+            pass
+
+    # 3. 持久化到用户配置文件
     cfg_path = _user_config_path()
     try:
         data = {}
@@ -161,17 +153,15 @@ async def set_llm_keys(payload: Dict[str, str], current_user: UserDB = Depends(g
         logger.error(f"Failed to persist LLM keys to {cfg_path}: {e}")
         raise HTTPException(status_code=500, detail="Failed to persist keys")
 
-    # 3. 清除"密钥失效"标记 —— 用户刚填了新密钥,应给它一次机会,
-    #    否则旧密钥的失效记录会让新密钥也被判为不可用。
+    # 4. 清除密钥失效标记
     from app.core.llm_config import clear_invalid_marks
     clear_invalid_marks()
 
-    # 4. 热重载所有 provider,使内部 agent 立即拿到新 key
+    # 5. 热重载 provider
     await load_llm_providers_to_redis()
-    logger.info(f"LLM keys updated and providers reloaded: {list(updates.keys())}")
+    logger.info(f"LLM config updated: {list(updates.keys())}")
     return {
         "status": "ok",
         "configured": [k for k in _KEY_ENV_NAMES if os.environ.get(k)],
-        # 前端据此提示"已校验通过"还是"未能校验,已保存"
         "verification": verdicts,
     }

@@ -1,0 +1,23 @@
+{
+  "DEFAULT_LLM_PROVIDER": "openai_compatible",
+  "DEFAULT_LLM_BASE_URL": "https://api.openai.com/v1",
+  "DEFAULT_LLM_MODEL_NAME": "gpt-4o",
+  "LIGHTWEIGHT_LLM_MODEL_NAME": "gpt-4o-mini",
+  "EMBEDDING_PROVIDER": "openai_compatible",
+  "EMBEDDING_MODEL_NAME": "text-embedding-3-small",
+  "EMBEDDING_DIMS": 1536,
+  "OPENAI_API_KEY": "",
+  "OPENAI_BASE_URL": "https://api.openai.com/v1",
+  "LLM_MODEL_NAME": "gpt-4o",
+  "SECRET_KEY": null,
+  "ALGORITHM": "HS256",
+  "ACCESS_TOKEN_EXPIRE_MINUTES": 30,
+  "TOPIC_SUMMARY_HISTORY_LIMIT": 5,
+  "LOG_LEVEL": "INFO",
+  "EMOTION_CONTEXT_TURNS": 2,
+  "PERSONALITY_SELECTION_MODE": "llm",
+  "VECTOR_DB_PATH": "./qdrant_db",
+  "DEFAULT_LLM_TEMPERATURE": 0.7,
+  "MEMORY_LLM_TEMPERATURE": 0.1,
+  "MEMORY_LLM_MAX_TOKENS": 1000
+}

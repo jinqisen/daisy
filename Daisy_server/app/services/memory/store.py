@@ -284,35 +284,31 @@ class MemoryService:
         # 注意：不要设置全局 os.environ["OPENAI_API_KEY"]，以避免污染 Embedder 的配置
         # Mem0 允许在 config 中显式指定 LLM 和 Embedder 的配置
 
-        # 远程嵌入(SiliconFlow,OpenAI 协议)。
+        # 远程嵌入(OpenAI 兼容协议)。
         #
         # 仅在**没有随包本地模型**时才走这条路 —— 本地模型已随安装包分发,
-        # 用它既不花钱也不依赖网络。原实现无条件覆盖:哪怕本地模型就在手边,
-        # 只要 EMBEDDING_PROVIDER=siliconflow 就改走远程,而没有那把密钥时
-        # 干脆 raise,把整个长期记忆废掉。
-        if not _bundled and embedding_provider == "siliconflow":
-            # settings 是启动时快照;桌面版用户在运行期通过 /config/llm_keys 填入的密钥
-            # 只进了 os.environ,故优先读环境变量,再回退 settings。
-            sf_api_key = os.environ.get("SILICONFLOW_API_KEY") or settings.SILICONFLOW_API_KEY
-            if sf_api_key:
-                logger.info(f"使用 SiliconFlow 嵌入模型: {settings.EMBEDDING_MODEL_NAME}")
-                # Mem0 的 BaseEmbedderConfig 使用 openai_base_url 参数
+        # 用它既不花钱也不依赖网络。
+        # 统一使用 OPENAI_API_KEY + OPENAI_BASE_URL，与对话模型共用同一密钥和端点。
+        if not _bundled and embedding_provider == "openai_compatible":
+            embed_api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
+            embed_base_url = os.environ.get("OPENAI_BASE_URL") or settings.OPENAI_BASE_URL or "https://api.openai.com/v1"
+            if embed_api_key:
+                logger.info(f"使用 OpenAI 兼容嵌入模型: {settings.EMBEDDING_MODEL_NAME} @ {embed_base_url}")
                 embedder_config = {
                     "provider": "openai",
                     "config": {
                         "model": settings.EMBEDDING_MODEL_NAME,
                         "embedding_dims": settings.EMBEDDING_DIMS,
-                        "api_key": sf_api_key,
-                        "openai_base_url": "https://api.siliconflow.cn/v1"
+                        "api_key": embed_api_key,
+                        "openai_base_url": embed_base_url.rstrip("/"),
                     }
                 }
             else:
-                # 既没有本地模型也没有远程密钥 —— 只能明确报错,但要说清怎么办
                 logger.error(
-                    "嵌入模型不可用:安装包内未找到本地模型,也未配置 SILICONFLOW_API_KEY。"
+                    "嵌入模型不可用:安装包内未找到本地模型,也未配置 OPENAI_API_KEY。"
                     "正常安装包应自带模型(见 packaging/fetch_models.py)。"
                 )
-                raise ValueError("No embedding model available: neither bundled model nor SILICONFLOW_API_KEY.")
+                raise ValueError("No embedding model available: neither bundled model nor OPENAI_API_KEY.")
 
         # 3. 构建最终配置
         # Mem0 的 OpenAIConfig 使用 openai_base_url 参数
