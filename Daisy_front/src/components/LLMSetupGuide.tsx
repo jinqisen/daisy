@@ -1,104 +1,43 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Input, Button, Alert, Typography, Space, message, Spin, Select, Collapse } from 'antd';
+import { Card, Input, Button, Alert, Typography, Space, message, Spin, Collapse } from 'antd';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 
 const { Text, Title, Paragraph, Link } = Typography;
 
 interface Props {
-    /** 配置成功后回调（用于让父组件重新检查角色卡/解除门禁） */
     onConfigured?: () => void;
 }
-
-/** 预设模板：常用服务商的 OpenAI 兼容接口 */
-const PRESET_TEMPLATES: Record<string, { baseUrl: string; model: string; label: string }> = {
-    openai: {
-        baseUrl: 'https://api.openai.com/v1',
-        model: 'gpt-4o',
-        label: 'OpenAI',
-    },
-    deepseek: {
-        baseUrl: 'https://api.deepseek.com/v1',
-        model: 'deepseek-chat',
-        label: 'DeepSeek',
-    },
-    siliconflow: {
-        baseUrl: 'https://api.siliconflow.cn/v1',
-        model: 'Pro/deepseek-ai/DeepSeek-V3.2',
-        label: '硅基流动 (SiliconFlow)',
-    },
-    qwen: {
-        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        model: 'qwen-plus',
-        label: '通义千问 (阿里云)',
-    },
-    zhipu: {
-        baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-        model: 'glm-4-flash',
-        label: '智谱 GLM',
-    },
-    moonshot: {
-        baseUrl: 'https://api.moonshot.cn/v1',
-        model: 'moonshot-v1-8k',
-        label: 'Moonshot (月之暗面)',
-    },
-    custom: {
-        baseUrl: '',
-        model: '',
-        label: '自定义（手动输入）',
-    },
-};
 
 const LLMSetupGuide: React.FC<Props> = ({ onConfigured }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [hasInvalidKey, setHasInvalidKey] = useState(false);
 
-    // 表单字段
     const [baseUrl, setBaseUrl] = useState('https://api.openai.com/v1');
     const [apiKey, setApiKey] = useState('');
     const [modelName, setModelName] = useState('gpt-4o');
     const [searchKey, setSearchKey] = useState('');
-    const [preset, setPreset] = useState('openai');
 
     useEffect(() => {
         const load = async () => {
             try {
                 const st = await axios.get(`${API_BASE_URL}/api/config/llm_status`);
                 setHasInvalidKey(Boolean(st.data?.has_invalid_key));
-                // 如果已有配置的 base_url / model_name，回填
                 if (st.data?.base_url) setBaseUrl(st.data.base_url);
                 if (st.data?.model_name) setModelName(st.data.model_name);
             } catch (e) {
-                // 状态查询失败按"未配置"处理
+                // ignore
             }
             setLoading(false);
         };
         load();
     }, []);
 
-    const handlePresetChange = (key: string) => {
-        setPreset(key);
-        const tpl = PRESET_TEMPLATES[key];
-        if (tpl && key !== 'custom') {
-            setBaseUrl(tpl.baseUrl);
-            setModelName(tpl.model);
-        }
-    };
-
     const handleSave = async () => {
-        if (!apiKey.trim()) {
-            message.warning('请填入 API Key');
-            return;
-        }
-        if (!baseUrl.trim()) {
-            message.warning('请填入 Base URL');
-            return;
-        }
-        if (!modelName.trim()) {
-            message.warning('请填入模型名称');
-            return;
-        }
+        if (!apiKey.trim()) { message.warning('请填入 API Key'); return; }
+        if (!baseUrl.trim()) { message.warning('请填入 Base URL'); return; }
+        if (!modelName.trim()) { message.warning('请填入模型名称'); return; }
         setSaving(true);
         try {
             const payload: Record<string, string> = {
@@ -106,9 +45,7 @@ const LLMSetupGuide: React.FC<Props> = ({ onConfigured }) => {
                 OPENAI_BASE_URL: baseUrl.trim(),
                 LLM_MODEL_NAME: modelName.trim(),
             };
-            if (searchKey.trim()) {
-                payload['HUAWEI_SEARCH_API_KEY'] = searchKey.trim();
-            }
+            if (searchKey.trim()) payload['HUAWEI_SEARCH_API_KEY'] = searchKey.trim();
 
             const saveRes = await axios.post(`${API_BASE_URL}/api/config/llm_keys`, payload);
             const verdicts = saveRes.data?.verification || {};
@@ -131,11 +68,6 @@ const LLMSetupGuide: React.FC<Props> = ({ onConfigured }) => {
 
     if (loading) return <Spin />;
 
-    const presetOptions = Object.entries(PRESET_TEMPLATES).map(([k, v]) => ({
-        value: k,
-        label: v.label,
-    }));
-
     return (
         <Card style={{ maxWidth: 560, width: '100%' }}>
             <Title level={4} style={{ marginTop: 0 }}>
@@ -143,52 +75,32 @@ const LLMSetupGuide: React.FC<Props> = ({ onConfigured }) => {
             </Title>
             {hasInvalidKey ? (
                 <Alert
-                    type="warning"
-                    showIcon
-                    style={{ marginBottom: 20 }}
+                    type="warning" showIcon style={{ marginBottom: 20 }}
                     message="当前 API Key 已失效"
                     description="服务商拒绝了这个密钥（可能已过期或被撤销）。请填入有效的 API Key 后继续。"
                 />
             ) : (
                 <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 20 }}
+                    type="info" showIcon style={{ marginBottom: 20 }}
                     message="兼容所有 OpenAI 接口的服务商"
                     description="支持 OpenAI、DeepSeek、通义千问、硅基流动、智谱等所有提供 OpenAI 兼容 API 的服务。你的 API Key 只保存在本机。"
                 />
             )}
 
             <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                {/* 预设模板 */}
-                <div>
-                    <Text strong>快速选择（可选）</Text>
-                    <Select
-                        value={preset}
-                        onChange={handlePresetChange}
-                        options={presetOptions}
-                        style={{ width: '100%', marginTop: 8 }}
-                    />
-                    <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
-                        选一个预设模板快速填充，或选"自定义"手动输入
-                    </Paragraph>
-                </div>
-
-                {/* Base URL */}
                 <div>
                     <Text strong>接口地址（Base URL）</Text>
                     <Input
                         style={{ marginTop: 8 }}
                         placeholder="https://api.openai.com/v1"
                         value={baseUrl}
-                        onChange={(e) => { setBaseUrl(e.target.value); setPreset('custom'); }}
+                        onChange={(e) => setBaseUrl(e.target.value)}
                     />
                     <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
                         服务商的 OpenAI 兼容 API 地址，必须以 /v1 结尾
                     </Paragraph>
                 </div>
 
-                {/* API Key */}
                 <div>
                     <Text strong>API Key</Text>
                     <Input.Password
@@ -203,41 +115,36 @@ const LLMSetupGuide: React.FC<Props> = ({ onConfigured }) => {
                     </Paragraph>
                 </div>
 
-                {/* 模型名称 */}
                 <div>
                     <Text strong>模型名称</Text>
                     <Input
                         style={{ marginTop: 8 }}
                         placeholder="gpt-4o / deepseek-chat / qwen-plus ..."
                         value={modelName}
-                        onChange={(e) => { setModelName(e.target.value); setPreset('custom'); }}
+                        onChange={(e) => setModelName(e.target.value)}
                     />
                     <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
                         你使用的模型名，如 gpt-4o、deepseek-v3.2、qwen-plus
                     </Paragraph>
                 </div>
 
-                {/* 联网搜索 */}
-                <Collapse
-                    ghost
-                    items={[{
-                        key: 'search',
-                        label: '联网搜索 API Key（可选）',
-                        children: (
-                            <div>
-                                <Input.Password
-                                    placeholder="留空则她无法查天气、新闻等实时信息"
-                                    value={searchKey}
-                                    onChange={(e) => setSearchKey(e.target.value)}
-                                    onPressEnter={handleSave}
-                                />
-                                <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 6, marginBottom: 0 }}>
-                                    <Link href="https://console.huaweicloud.com/csb/" target="_blank" rel="noreferrer">前往申请华为云搜索服务</Link>
-                                </Paragraph>
-                            </div>
-                        ),
-                    }]}
-                />
+                <Collapse ghost items={[{
+                    key: 'search',
+                    label: '联网搜索 API Key（可选）',
+                    children: (
+                        <div>
+                            <Input.Password
+                                placeholder="留空则她无法查天气、新闻等实时信息"
+                                value={searchKey}
+                                onChange={(e) => setSearchKey(e.target.value)}
+                                onPressEnter={handleSave}
+                            />
+                            <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 6, marginBottom: 0 }}>
+                                <Link href="https://console.huaweicloud.com/csb/" target="_blank" rel="noreferrer">前往申请华为云搜索服务</Link>
+                            </Paragraph>
+                        </div>
+                    ),
+                }]} />
 
                 <Button type="primary" size="large" block loading={saving} onClick={handleSave}>
                     {saving ? '正在校验密钥…' : '保存并开始'}
