@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, message, Spin, Alert, Typography, Input, Space } from 'antd';
+import { Card, Button, message, Spin, Alert, Typography, Input, Space, Select } from 'antd';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 
@@ -14,6 +14,10 @@ const UserLLMConfig: React.FC = () => {
 
     const [baseUrl, setBaseUrl] = useState('https://api.openai.com/v1');
     const [modelName, setModelName] = useState('gpt-4o');
+
+    // 模型列表
+    const [models, setModels] = useState<string[]>([]);
+    const [fetchingModels, setFetchingModels] = useState(false);
 
     const fetchKeyStatus = async () => {
         try {
@@ -37,6 +41,39 @@ const UserLLMConfig: React.FC = () => {
         };
         init();
     }, []);
+
+    const handleFetchModels = async () => {
+        const currentBaseUrl = baseUrl?.trim();
+        const currentApiKey = keyInputs['OPENAI_API_KEY']?.trim() || (keyStatus['OPENAI_API_KEY'] ? '' : '');
+        if (!currentBaseUrl) { message.warning('请先填入 Base URL'); return; }
+        if (!currentApiKey) { message.warning('请先填入 API Key'); return; }
+
+        setFetchingModels(true);
+        try {
+            const url = currentBaseUrl.replace(/\/+$/, '') + '/models';
+            const resp = await axios.get(url, {
+                headers: { Authorization: `Bearer ${currentApiKey}` },
+                timeout: 15000,
+            });
+            const data = resp.data?.data || [];
+            const ids: string[] = data
+                .map((m: any) => m.id)
+                .filter((id: string) => id && typeof id === 'string')
+                .sort();
+            if (ids.length === 0) {
+                message.warning('未获取到模型列表，请检查 Base URL 和 API Key');
+            } else {
+                setModels(ids);
+                message.success(`获取到 ${ids.length} 个模型`);
+                if (!ids.includes(modelName)) setModelName(ids[0]);
+            }
+        } catch (e: any) {
+            const detail = e?.response?.data?.error?.message || e?.message || '请求失败';
+            message.error(`获取模型列表失败: ${detail}`);
+        } finally {
+            setFetchingModels(false);
+        }
+    };
 
     const handleSaveKeys = async () => {
         const payload: Record<string, string> = {};
@@ -79,21 +116,17 @@ const UserLLMConfig: React.FC = () => {
     return (
         <div style={{ maxWidth: 600 }}>
             <Card title="LLM 模型配置" style={{ marginBottom: 24 }}>
-                <Alert
-                    type="info" showIcon style={{ marginBottom: 20 }}
+                <Alert type="info" showIcon style={{ marginBottom: 20 }}
                     message="OpenAI 兼容接口"
-                    description="支持所有提供 OpenAI 兼容 API 的服务商（OpenAI、DeepSeek、通义千问、硅基流动、智谱等）。填入你的 Base URL、API Key 和模型名即可。"
-                />
+                    description="支持所有提供 OpenAI 兼容 API 的服务商。填入 Base URL 和 API Key 后可获取模型列表。" />
 
                 <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                     <div>
                         <Text strong>接口地址（Base URL）</Text>
-                        <Input
-                            style={{ marginTop: 8 }}
+                        <Input style={{ marginTop: 8 }}
                             placeholder="https://api.openai.com/v1"
                             value={baseUrl}
-                            onChange={(e) => setBaseUrl(e.target.value)}
-                        />
+                            onChange={(e) => { setBaseUrl(e.target.value); setModels([]); }} />
                         <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
                             服务商的 OpenAI 兼容 API 地址，必须以 /v1 结尾
                         </Paragraph>
@@ -101,38 +134,54 @@ const UserLLMConfig: React.FC = () => {
 
                     <div>
                         <Text strong>API Key</Text>
-                        <Input.Password
-                            style={{ marginTop: 8 }}
+                        <Input.Password style={{ marginTop: 8 }}
                             placeholder={keyStatus['OPENAI_API_KEY'] ? '已配置（留空则不修改）' : 'sk-...'}
                             value={keyInputs['OPENAI_API_KEY'] || ''}
-                            onChange={(e) => setKeyInputs({ ...keyInputs, OPENAI_API_KEY: e.target.value })}
-                        />
+                            onChange={(e) => { setKeyInputs({ ...keyInputs, OPENAI_API_KEY: e.target.value }); setModels([]); }} />
                         <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
                             密钥只保存在本机，不会上传到任何服务器
                         </Paragraph>
                     </div>
 
                     <div>
-                        <Text strong>模型名称</Text>
-                        <Input
-                            style={{ marginTop: 8 }}
-                            placeholder="gpt-4o / deepseek-chat / qwen-plus ..."
-                            value={modelName}
-                            onChange={(e) => setModelName(e.target.value)}
-                        />
+                        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                            <Text strong>模型名称</Text>
+                            <Button size="small" loading={fetchingModels} onClick={handleFetchModels}
+                                disabled={!baseUrl?.trim()}>
+                                获取模型列表
+                            </Button>
+                        </Space>
+                        {models.length > 0 ? (
+                            <Select
+                                showSearch
+                                style={{ width: '100%', marginTop: 8 }}
+                                placeholder="选择模型"
+                                value={modelName}
+                                onChange={(v) => setModelName(v)}
+                                options={models.map((m) => ({ value: m, label: m }))}
+                                filterOption={(input, option) =>
+                                    (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+                                }
+                            />
+                        ) : (
+                            <Input style={{ marginTop: 8 }}
+                                placeholder="gpt-4o / deepseek-chat / qwen-plus ..."
+                                value={modelName}
+                                onChange={(e) => setModelName(e.target.value)} />
+                        )}
                         <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
-                            模型名称，如 gpt-4o、deepseek-v3.2、qwen-plus
+                            {models.length > 0
+                                ? `共 ${models.length} 个可用模型，支持搜索过滤`
+                                : '手动输入模型名，或点击"获取模型列表"从接口拉取'}
                         </Paragraph>
                     </div>
 
                     <div>
                         <Text strong>联网搜索 API Key（可选）</Text>
-                        <Input.Password
-                            style={{ marginTop: 8 }}
+                        <Input.Password style={{ marginTop: 8 }}
                             placeholder={keyStatus['HUAWEI_SEARCH_API_KEY'] ? '已配置（留空则不修改）' : '粘贴搜索 API Key'}
                             value={keyInputs['HUAWEI_SEARCH_API_KEY'] || ''}
-                            onChange={(e) => setKeyInputs({ ...keyInputs, HUAWEI_SEARCH_API_KEY: e.target.value })}
-                        />
+                            onChange={(e) => setKeyInputs({ ...keyInputs, HUAWEI_SEARCH_API_KEY: e.target.value })} />
                         <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
                             <Link href="https://console.huaweicloud.com/csb/" target="_blank" rel="noreferrer">前往申请华为云搜索服务</Link>
                         </Paragraph>
