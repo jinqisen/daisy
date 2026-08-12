@@ -8,7 +8,6 @@ from .nodes import (
     summarize_topic,    # Task 4 Independent Node
     ensure_portrait,    # Task 1 Independent Node
     analyze_style,      # Task 2 Independent Node
-    agent_thoughts,     # Task 3 Independent Node
     # consult_agents, # Merged into generate
     generate_response,
     save_memory_and_log,
@@ -113,7 +112,6 @@ def create_graph():
     workflow.add_node("summarize_topic", summarize_topic)       # 任务 4
     workflow.add_node("ensure_portrait", ensure_portrait)       # 任务 1
     workflow.add_node("analyze_style", analyze_style)           # 任务 2
-    workflow.add_node("agent_thoughts", agent_thoughts)         # 任务 3
     # workflow.add_node("consult", consult_agents)
     workflow.add_node("generate", generate_response)
     workflow.add_node("save", save_memory_and_log)
@@ -156,15 +154,10 @@ def create_graph():
     # 风格分析 (Task 2): 依赖沟通风格
     workflow.add_edge("analyze_communication_style", "analyze_style")
     
-    # 角色思考 (Task 3): 依赖沟通风格、话题总结、画像
-    workflow.add_edge("analyze_communication_style", "agent_thoughts")
-    workflow.add_edge("summarize_topic", "agent_thoughts")
-    workflow.add_edge("ensure_portrait", "agent_thoughts")
     
     # 汇聚到生成
-    # generate 依赖: analyze_style, agent_thoughts, retrieve
+    # generate 依赖: analyze_style, retrieve
     workflow.add_edge("analyze_style", "generate")
-    workflow.add_edge("agent_thoughts", "generate")
     workflow.add_edge("retrieve", "generate")
     workflow.add_edge("tool_check", "generate")
 

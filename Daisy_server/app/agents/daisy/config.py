@@ -21,6 +21,9 @@ class CommonSettings(BaseModel):
     background_image_path: Optional[str] = None # 聊天背景图片路径
     world_setting: Optional[str] = None # 世界观设定
     
+    # 回复风格 (角色卡片配置项)
+    response_style: Optional[str] = "concise"  # concise(精简) | natural(自然)
+    
     # 动态指令模板 (用户/上下文提示词)
     system_prompt_template: Optional[str] = None 
     

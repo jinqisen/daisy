@@ -198,6 +198,64 @@ async def _analyze_style(
     ])
     return response.content or ""
 
+async def _analyze_context(
+    user_input: str,
+    history: List[Dict[str, Any]],
+    context_data: Dict[str, Any]
+) -> tuple:
+    """合并 _analyze_style + _agent_thoughts 为一次 LLM 调用。
+
+    返回 (style_rules: str, agent_thoughts: str)
+
+    经 2026-08 对照测试（temp=0），合并版输出更简洁结构化，
+    且不会被 max_tokens 截断，质量不低于两次独立调用。
+    """
+    top_emotion = _extract_top_emotion(context_data.get("emotion", {}))
+    topic_summary = context_data.get("topic", {}).get("summary", "")
+    persona_info = context_data.get("persona_info", {})
+    portrait_text = context_data.get("portrait", {}).get("portrait_text", "")
+    memories = context_data.get("memories", {}).get("memories", [])
+    history_text = _format_history_text(history)
+
+    prompt = (
+        "请基于以下上下文，同时输出沟通风格规则和内在思考。"
+        f"\n用户输入: {user_input}"
+        f"\n用户情绪: {top_emotion}"
+        f"\n话题摘要: {topic_summary}"
+        f"\n角色信息: {persona_info}"
+        f"\n角色画像: {portrait_text}"
+        f"\n相关记忆: {_format_memories(memories)}"
+        f"\n最近对话: {history_text}"
+        "\n\n请严格按以下格式输出："
+        "\n【风格规则】"
+        "\n（3-5条简短规则，体现情感陪伴、自然口语、尊重边界）"
+        "\n\n【内在思考】"
+        "\n意图：（一句话）"
+        "\n策略：（一句话）"
+        "\n边界：（一句话）"
+    )
+
+    llm = _create_llm(0.25)
+    response = await llm.ainvoke([
+        SystemMessage(content="你是陪伴式对话的分析助手，同时输出风格规则和内在思考。"),
+        HumanMessage(content=prompt)
+    ])
+    raw = response.content or ""
+
+    # 拆分
+    if "【内在思考】" in raw:
+        parts = raw.split("【内在思考】", 1)
+        style_rules = parts[0].replace("【风格规则】", "").strip()
+        agent_thoughts = parts[1].strip()
+    else:
+        # 兜底：拆分失败时整个作为风格规则，内在思考为空
+        style_rules = raw
+        agent_thoughts = ""
+
+    return style_rules, agent_thoughts
+
+
+
 
 async def _agent_thoughts(
     user_input: str,
@@ -271,22 +329,27 @@ async def _collect_context(
     if not skill_executor:
         return context_data
 
-    try:
-        emotion_result = await skill_executor.execute(
-            skill_name="emotion",
-            operation="analyze",
-            input_data={
-                "text": user_input,
-                "user_id": user_id,
-                "session_id": session_id,
-                "context_history": history
-            },
-            context={"user_id": user_id, "session_id": session_id}
-        )
-        if emotion_result.success and emotion_result.data:
-            context_data["emotion"] = emotion_result.data
-    except Exception as e:
-        logger.warning("emotion_analysis_failed", error=str(e))
+    # 优先复用 router 中已分析的 emotion 结果，避免重复调用
+    cached_emotion = state.get("emotion_data")
+    if cached_emotion:
+        context_data["emotion"] = cached_emotion
+    else:
+        try:
+            emotion_result = await skill_executor.execute(
+                skill_name="emotion",
+                operation="analyze",
+                input_data={
+                    "text": user_input,
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "context_history": history
+                },
+                context={"user_id": user_id, "session_id": session_id}
+            )
+            if emotion_result.success and emotion_result.data:
+                context_data["emotion"] = emotion_result.data
+        except Exception as e:
+            logger.warning("emotion_analysis_failed", error=str(e))
 
     topic_summary = ""
     try:
@@ -382,19 +445,17 @@ async def _collect_context(
     except Exception as e:
         logger.warning("portrait_generate_failed", error=str(e))
 
-    try:
-        style_analysis = await _analyze_style(user_input, history, context_data)
-        if style_analysis:
-            context_data["style_analysis"] = style_analysis
-    except Exception as e:
-        logger.warning("style_analysis_failed", error=str(e))
-
-    try:
-        agent_thoughts = await _agent_thoughts(user_input, history, context_data)
-        if agent_thoughts:
-            context_data["agent_thoughts"] = agent_thoughts
-    except Exception as e:
-        logger.warning("agent_thoughts_failed", error=str(e))
+    if settings.ENABLE_DYNAMIC_STYLE_ANALYSIS:
+        try:
+            style_analysis, agent_thoughts = await _analyze_context(
+                user_input, history, context_data
+            )
+            if style_analysis:
+                context_data["style_analysis"] = style_analysis
+            if agent_thoughts:
+                context_data["agent_thoughts"] = agent_thoughts
+        except Exception as e:
+            logger.warning("analyze_context_failed", error=str(e))
 
     if state_manager and conversation_id:
         try:
@@ -578,7 +639,9 @@ async def _refine_response(
     except Exception:
         refined_text = draft
 
-    return await _compress_response_to_limit(refined_text, user_input, context_data)
+    if settings.ENABLE_COMPRESS_RESPONSE:
+        return await _compress_response_to_limit(refined_text, user_input, context_data)
+    return refined_text
 
 
 async def _persist_memory(
@@ -673,7 +736,10 @@ async def standard_generate(
         response=draft,
         error=None
     )
-    refined = await _refine_response(draft, user_input, context_data)
+    if settings.ENABLE_REFINE_RESPONSE:
+        refined = await _refine_response(draft, user_input, context_data)
+    else:
+        refined = draft
     await _persist_memory(user_input, refined, user_id, session_id, context_data, skill_executor)
     return {"response": refined}
 
@@ -741,7 +807,10 @@ async def context_aware_generate(
         response=draft,
         error=None
     )
-    refined = await _refine_response(draft, user_input, context_data)
+    if settings.ENABLE_REFINE_RESPONSE:
+        refined = await _refine_response(draft, user_input, context_data)
+    else:
+        refined = draft
     await _persist_memory(user_input, refined, user_id, session_id, context_data, skill_executor)
     return {"response": refined}
 
@@ -866,7 +935,10 @@ async def tool_required_generate(
         response=draft,
         error=None
     )
-    refined = await _refine_response(draft, user_input, context_data)
+    if settings.ENABLE_REFINE_RESPONSE:
+        refined = await _refine_response(draft, user_input, context_data)
+    else:
+        refined = draft
     await _persist_memory(user_input, refined, user_id, session_id, context_data, skill_executor)
     return {"response": refined}
 
@@ -940,6 +1012,9 @@ async def quick_generate(
         response=draft,
         error=None
     )
-    refined = await _refine_response(draft, user_input, context_data)
+    if settings.ENABLE_REFINE_RESPONSE:
+        refined = await _refine_response(draft, user_input, context_data)
+    else:
+        refined = draft
     await _persist_memory(user_input, refined, user_id, session_id, context_data, skill_executor)
     return {"response": refined}

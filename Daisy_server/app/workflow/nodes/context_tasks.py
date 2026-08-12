@@ -5,7 +5,6 @@ DEEP 路径的并行上下文任务节点(自 generation.py 拆出,行为不变)
 - summarize_topic  → topic_summary        (Task 4)
 - ensure_portrait  → portrait             (Task 1)
 - analyze_style    → style_analysis       (Task 2, 依赖 love_style_weights)
-- agent_thoughts   → agent_thoughts       (Task 3, 依赖 love_style_weights/topic_summary/portrait)
 
 汇聚与最终生成见 generation.py;上下文文本装配见 context_assembly.py。
 """
@@ -26,7 +25,6 @@ from ...services.dialogue.generation import (
     generate_character_portrait_async,
     generate_topic_summary,
     generate_style_analysis,
-    generate_agent_thoughts,
 )
 
 logger = structlog.get_logger()
@@ -201,7 +199,7 @@ async def analyze_style(state: AgentState) -> AgentState:
     try:
         if "love_style_weights" not in state:
             # 依赖缺失时只跳过自身、不写 _skip_generation:该键是 generate/fast/standard
-            # 的单写者键(见 state.py 契约)。本节点与 agent_thoughts 同一 superstep 并行,
+            # 的单写者键(见 state.py 契约)。
             # 双写会触发 LangGraph InvalidUpdateError;跳过语义由 generate 的汇聚检查兜底
             # (缺 style_analysis 即跳过)。
             logger.info("Analyze Style: Waiting for love_style_weights. Skipping.")
@@ -254,66 +252,3 @@ async def analyze_style(state: AgentState) -> AgentState:
     except Exception as e:
         logger.error(f"Error in analyze_style: {e}")
         raise NodeError("StyleAnalysis", e)
-
-
-@enhancement(fallback={})
-@monitor_execution_time
-async def agent_thoughts(state: AgentState) -> AgentState:
-    """
-    独立节点：角色思考 (Task 3)
-    依赖：love_style_weights, topic_summary, portrait
-    """
-    try:
-        missing = [k for k in ["love_style_weights", "topic_summary", "portrait"] if k not in state]
-        if missing:
-            # 同 analyze_style:不写 _skip_generation(单写者键,双写会崩),
-            # 跳过语义由 generate 的汇聚检查兜底(缺 agent_thoughts 即跳过)。
-            logger.info(f"Agent Thoughts: Waiting for dependencies {missing}. Skipping.")
-            return {}
-
-        user_id = state["user_id"]
-        user_input = state["user_input"]
-        user_message_id = state.get("user_message_id")
-        love_style_data = state["love_style_weights"]
-        history_analysis_result = state["topic_summary"]
-        portrait_from_state = state["portrait"]
-
-        # 优化：从 State 获取 Active Profiles
-        active_profiles_list = state.get("active_profiles")
-        if not active_profiles_list:
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = asyncio.get_event_loop()
-            active_profiles_list = await loop.run_in_executor(None, _get_active_profiles_sync, user_id)
-            if active_profiles_list: state["active_profiles"] = active_profiles_list
-
-        active_profiles, mix_names, weights = _calculate_active_personas(active_profiles_list, love_style_data)
-        route = state.get("route", "STANDARD")
-        logger.info(f"Task 3: 开始角色思考 (Route: {route})")
-        thoughts = await generate_agent_thoughts(
-            user_input,
-            user_id,
-            weights,
-            state.get("selected_personality", ""),
-            history_analysis_result,
-            portrait_from_state,
-            trigger_message_id=user_message_id,
-            active_profiles_list=active_profiles, # Pass list of tuples (RoleProfile, float)
-            state=state # Pass state for route
-        )
-
-        if thoughts:
-             logger.info("角色内心独白 (Async Lite - 并行)",
-                participants=list(thoughts.keys()),
-                internal_thoughts=thoughts,
-                engine="AsyncLite",
-                mode="Single" if len(thoughts) == 1 else "Multi"
-            )
-
-        trace = await add_trace(state, "agent_thoughts", input_data={"weights": weights}, output_data={"agent_thoughts": thoughts})
-
-        return {"agent_thoughts": thoughts, "workflow_trace": trace}
-    except Exception as e:
-        logger.error(f"Error in agent_thoughts: {e}")
-        raise NodeError("AgentThoughts", e)

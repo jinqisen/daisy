@@ -147,6 +147,12 @@ async def router_node(state: AgentState) -> AgentState:
         if route != "quick" and any(keyword in user_input for keyword in tool_keywords):
             route = "tool_required"
         
+        # 将 emotion 结果存入 state，避免 generation 中重复分析
+        if emotion_result and emotion_result.success and emotion_result.data:
+            state["emotion_data"] = emotion_result.data
+        else:
+            state["emotion_data"] = None
+
         state["route"] = route
         state["next_step"] = "generate"
         state["session_id"] = session_id

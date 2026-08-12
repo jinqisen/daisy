@@ -20,7 +20,7 @@
 
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional, Union
 
 import structlog
 
@@ -40,7 +40,7 @@ def _declare(name: str, level: Capability) -> None:
     _LEVELS[name] = level
 
 
-def capability_of(name: str) -> Capability | None:
+def capability_of(name: str) -> Optional[Capability]:
     return _LEVELS.get(name)
 
 
@@ -58,7 +58,7 @@ def essential(fn: Callable) -> Callable:
     return fn
 
 
-def enhancement(*, fallback: Dict[str, Any] | Callable[[], Dict[str, Any]] | None = None):
+def enhancement(*, fallback: Optional[Union[Dict[str, Any], Callable[[], Dict[str, Any]]]] = None):
     """
     标记为增强节点,并**强制**兜底:任何异常都转为降级返回,不向上传播。
 

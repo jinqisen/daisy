@@ -1,0 +1,238 @@
+{
+  "token_latency": [
+    {
+      "input": "短输入",
+      "output": "极短输出",
+      "input_chars": 61,
+      "output_chars": 8,
+      "input_tokens_est": 36,
+      "output_tokens_est": 4,
+      "avg_latency": 1.8987560272216797,
+      "min_latency": 1.3327569961547852,
+      "max_latency": 2.773444175720215,
+      "runs": 3
+    },
+    {
+      "input": "短输入",
+      "output": "短输出",
+      "input_chars": 63,
+      "output_chars": 20,
+      "input_tokens_est": 37,
+      "output_tokens_est": 12,
+      "avg_latency": 2.125547250111898,
+      "min_latency": 1.682373046875,
+      "max_latency": 2.3958897590637207,
+      "runs": 3
+    },
+    {
+      "input": "短输入",
+      "output": "中输出",
+      "input_chars": 70,
+      "output_chars": 108,
+      "input_tokens_est": 42,
+      "output_tokens_est": 64,
+      "avg_latency": 4.04075288772583,
+      "min_latency": 3.740083932876587,
+      "max_latency": 4.351617813110352,
+      "runs": 3
+    },
+    {
+      "input": "短输入",
+      "output": "长输出",
+      "input_chars": 74,
+      "output_chars": 287,
+      "input_tokens_est": 44,
+      "output_tokens_est": 172,
+      "avg_latency": 7.962133328119914,
+      "min_latency": 6.5323779582977295,
+      "max_latency": 9.587921857833862,
+      "runs": 3
+    },
+    {
+      "input": "中输入",
+      "output": "极短输出",
+      "input_chars": 117,
+      "output_chars": 11,
+      "input_tokens_est": 70,
+      "output_tokens_est": 6,
+      "avg_latency": 1.4549291133880615,
+      "min_latency": 1.2761001586914062,
+      "max_latency": 1.5856361389160156,
+      "runs": 3
+    },
+    {
+      "input": "中输入",
+      "output": "短输出",
+      "input_chars": 119,
+      "output_chars": 39,
+      "input_tokens_est": 71,
+      "output_tokens_est": 23,
+      "avg_latency": 2.9804590543111167,
+      "min_latency": 2.2665412425994873,
+      "max_latency": 3.742720127105713,
+      "runs": 3
+    },
+    {
+      "input": "中输入",
+      "output": "中输出",
+      "input_chars": 126,
+      "output_chars": 148,
+      "input_tokens_est": 75,
+      "output_tokens_est": 88,
+      "avg_latency": 5.4544135729471845,
+      "min_latency": 4.40023398399353,
+      "max_latency": 6.39542293548584,
+      "runs": 3
+    },
+    {
+      "input": "中输入",
+      "output": "长输出",
+      "input_chars": 130,
+      "output_chars": 340,
+      "input_tokens_est": 78,
+      "output_tokens_est": 204,
+      "avg_latency": 8.80303923288981,
+      "min_latency": 7.484472751617432,
+      "max_latency": 10.41639518737793,
+      "runs": 3
+    },
+    {
+      "input": "长输入",
+      "output": "极短输出",
+      "input_chars": 306,
+      "output_chars": 12,
+      "input_tokens_est": 183,
+      "output_tokens_est": 7,
+      "avg_latency": 1.906465768814087,
+      "min_latency": 1.292051076889038,
+      "max_latency": 2.7925732135772705,
+      "runs": 3
+    },
+    {
+      "input": "长输入",
+      "output": "短输出",
+      "input_chars": 308,
+      "output_chars": 45,
+      "input_tokens_est": 184,
+      "output_tokens_est": 27,
+      "avg_latency": 2.9857610066731772,
+      "min_latency": 2.228864908218384,
+      "max_latency": 3.693526029586792,
+      "runs": 3
+    },
+    {
+      "input": "长输入",
+      "output": "中输出",
+      "input_chars": 315,
+      "output_chars": 209,
+      "input_tokens_est": 189,
+      "output_tokens_est": 125,
+      "avg_latency": 6.857608954111735,
+      "min_latency": 5.891930818557739,
+      "max_latency": 7.713369131088257,
+      "runs": 3
+    },
+    {
+      "input": "长输入",
+      "output": "长输出",
+      "input_chars": 319,
+      "output_chars": 516,
+      "input_tokens_est": 191,
+      "output_tokens_est": 309,
+      "avg_latency": 10.774943987528482,
+      "min_latency": 9.698340892791748,
+      "max_latency": 11.378351926803589,
+      "runs": 3
+    }
+  ],
+  "prompt_optimization": [
+    {
+      "name": "原始长prompt",
+      "system_chars": 300,
+      "system_tokens_est": 180,
+      "avg_latency": 1.8993985176086425,
+      "min_latency": 1.7869510650634766,
+      "max_latency": 2.1051928997039795,
+      "avg_output_chars": 30.4,
+      "runs": 5
+    },
+    {
+      "name": "精简prompt",
+      "system_chars": 59,
+      "system_tokens_est": 35,
+      "avg_latency": 2.374390411376953,
+      "min_latency": 2.0912270545959473,
+      "max_latency": 2.6384100914001465,
+      "avg_output_chars": 22.6,
+      "runs": 5
+    }
+  ],
+  "concurrent_vs_serial": {
+    "serial_total": 6.215267181396484,
+    "concurrent_total": 4.031041145324707,
+    "concurrent_max_single": 4.0300469398498535,
+    "speedup": 1.5418515855649582
+  },
+  "system_prompt_length": [
+    {
+      "name": "极简 (20字)",
+      "sys_chars": 10,
+      "sys_tokens_est": 6,
+      "total_tokens_est": 39,
+      "avg_latency": 2.2513326009114585,
+      "latencies": [
+        2.396127939224243,
+        1.9953758716583252,
+        2.3624939918518066
+      ]
+    },
+    {
+      "name": "短 (80字)",
+      "sys_chars": 31,
+      "sys_tokens_est": 18,
+      "total_tokens_est": 51,
+      "avg_latency": 2.457183361053467,
+      "latencies": [
+        2.1039440631866455,
+        3.555076837539673,
+        1.712529182434082
+      ]
+    },
+    {
+      "name": "中 (200字)",
+      "sys_chars": 73,
+      "sys_tokens_est": 43,
+      "total_tokens_est": 76,
+      "avg_latency": 2.0280534426371255,
+      "latencies": [
+        1.892348051071167,
+        2.4489080905914307,
+        1.7429041862487793
+      ]
+    },
+    {
+      "name": "长 (500字)",
+      "sys_chars": 220,
+      "sys_tokens_est": 132,
+      "total_tokens_est": 165,
+      "avg_latency": 1.858521302541097,
+      "latencies": [
+        1.6844406127929688,
+        1.792769193649292,
+        2.0983541011810303
+      ]
+    },
+    {
+      "name": "超长 (1000字)",
+      "sys_chars": 430,
+      "sys_tokens_est": 258,
+      "total_tokens_est": 291,
+      "avg_latency": 1.9427927335103352,
+      "latencies": [
+        1.509835958480835,
+        1.8271009922027588,
+        2.491441249847412
+      ]
+    }
+  ]
+}

@@ -35,7 +35,6 @@ from .context_tasks import (  # noqa: F401
     summarize_topic,
     ensure_portrait,
     analyze_style,
-    agent_thoughts,
     _get_active_profiles_sync,
     _calculate_active_personas,
 )
@@ -88,8 +87,8 @@ async def generate_response(state: AgentState) -> AgentState:
     """
     try:
         # --- 并行汇聚检查 (Sync Point) ---
-        # 新增依赖：style_analysis, agent_thoughts
-        missing = [k for k in ["topic_summary", "retrieved_memories", "portrait", "style_analysis", "agent_thoughts"] if k not in state]
+        # 依赖：style_analysis
+        missing = [k for k in ["topic_summary", "retrieved_memories", "portrait", "style_analysis"] if k not in state]
         if missing:
             logger.info(f"Generate Node: Waiting for dependencies {missing}. Skipping generation.")
             return {"_skip_generation": True}
@@ -100,7 +99,6 @@ async def generate_response(state: AgentState) -> AgentState:
         history_analysis_result = state["topic_summary"]
         portrait_from_state = state["portrait"]
         style_analysis = state["style_analysis"]
-        agent_thoughts = state["agent_thoughts"]
         retrieved_memories = state.get("retrieved_memories", [])
         tool_results = state.get("tool_results", {})
 
@@ -150,7 +148,7 @@ async def generate_response(state: AgentState) -> AgentState:
             weights = state["love_style_weights"]["weights"]
 
         # 3. 格式化输出 (Tasks 1-4)
-        portrait_text, style_text, os_text, history_text = _format_task_outputs(portrait_from_state, style_analysis, agent_thoughts, history_analysis_result, retrieved_memories, weights)
+        portrait_text, style_text, os_text, history_text = _format_task_outputs(portrait_from_state, style_analysis, history_analysis_result, retrieved_memories, weights)
 
         # 4. 生成 CO-STAR Prompt (Task 5)
         # 优化：直接使用 Python 代码构建 CO-STAR 指令，避免额外的 LLM 调用
@@ -158,7 +156,6 @@ async def generate_response(state: AgentState) -> AgentState:
             common, state,
             portrait_text=portrait_text,
             style_text=style_text,
-            os_text=os_text,
             history_text=history_text,
             emotional_state=emotional_state_data
         )
@@ -348,6 +345,7 @@ async def generate_response(state: AgentState) -> AgentState:
             "selected_personality": common.name,
             "system_prompt": system_instructions,
             "workflow_trace": trace,
+            "final_thought": final_thought,  # 保留用于下一轮上下文连续性
             "_skip_generation": False # 明确重置跳过标志，确保 save 节点执行
         }
     except Exception as e:

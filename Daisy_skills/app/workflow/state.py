@@ -9,6 +9,7 @@ class AgentState(TypedDict):
     session_id: Optional[str]
     conversation_id: Optional[str]
     route: str
+    emotion_data: Optional[Dict[str, Any]]
     
     chat_history: List[Any]
     

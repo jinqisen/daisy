@@ -101,7 +101,7 @@ class Settings(BaseSettings):
     ADMIN_TOKENS: str = Field("")
     
     # Security
-    SECRET_KEY: str = Field(""  # 首次启动时自动生成随机密钥;生产环境请通过环境变量 SECRET_KEY 设置)
+    SECRET_KEY: str = Field("")  # 首次启动时自动生成随机密钥;生产环境请通过环境变量 SECRET_KEY 设置)
     ALGORITHM: str = Field("HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(30)
     
@@ -132,10 +132,36 @@ class Settings(BaseSettings):
             password=self.REDIS_PASSWORD
         )
 
+    # Kling (可灵) Video Generation
+    KLING_API_KEY: Optional[str] = Field(None)
+    KLING_ACCESS_KEY: Optional[str] = Field(None)
+    KLING_SECRET_KEY: Optional[str] = Field(None)
+
+    # ──────────────────────────────────────────────
+    # 响应优化开关（速度 vs 质量权衡）
+    # 设为 False 可跳过对应的 LLM 调用，显著降低延迟。
+    # 经 2026-08 对比测试，关闭后回复质量无明显下降，
+    # 故默认关闭。如需恢复，设为 True 或设环境变量即可。
+    # 详见 docs/RESPONSE_OPTIMIZATION.md
+    # ──────────────────────────────────────────────
+    ENABLE_DYNAMIC_STYLE_ANALYSIS: bool = Field(
+        True,
+        description="启用 _analyze_style + _agent_thoughts（动态沟通风格分析，每次请求 +2-6s）"
+    )
+    ENABLE_REFINE_RESPONSE: bool = Field(
+        False,
+        description="启用 _refine_response（主 LLM 后的二次润色，每次请求 +2-5s）"
+    )
+    ENABLE_COMPRESS_RESPONSE: bool = Field(
+        False,
+        description="启用 _compress_response_to_limit（条件触发，超2句时压缩，+1-2s）"
+    )
+
     model_config = SettingsConfigDict(
         env_file=_env_path,
         env_file_encoding='utf-8',
         extra='ignore'
     )
+
 
 settings = Settings()

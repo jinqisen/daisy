@@ -1,3 +1,4 @@
+from __future__ import annotations
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.services.system.schema_bootstrap import init_db
@@ -16,7 +17,7 @@ from app.core.config import settings
 logger = structlog.get_logger()
 
 
-def _normalize_api_key(api_key: str | None) -> str | None:
+def _normalize_api_key(api_key: Optional[str]) -> Optional[str]:
     if api_key is None:
         return None
     key = str(api_key).strip()
@@ -37,7 +38,7 @@ def _normalize_api_key(api_key: str | None) -> str | None:
     return key
 
 
-def _normalize_base_url(url: str | None) -> str | None:
+def _normalize_base_url(url: Optional[str]) -> Optional[str]:
     if not url:
         return url
     return str(url).strip().strip("',`\" ").rstrip(",").strip("',`\" ")

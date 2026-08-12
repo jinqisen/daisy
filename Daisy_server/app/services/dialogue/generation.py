@@ -25,7 +25,6 @@ import json
 import re
 from app.multi_agent import multi_agent_service
 from typing import Dict, List, Tuple, Any, Optional
-from app.services.persona.fusion import fusion_engine
 from app.prompts import RoleProfile
 
 logger = structlog.get_logger()
@@ -102,7 +101,6 @@ async def generate_deep_character_card(common: CommonSettings) -> Optional[Chara
     """
     
     llm = get_llm_service()
-    
     try:
         # 调用 LLM (推荐使用较强的模型如 gpt-4o 或 deepseek-v3)
         # 专用超时:角色卡是一次性的大输出(实测 2000+ tokens),通用 60s 聊天超时
@@ -153,7 +151,6 @@ def generate_character_portrait(common: CommonSettings) -> str:
     
     llm = get_llm_service()
     generated_portrait = f"{common.name} is a {common.age}-year-old {common.gender} {common.occupation}."
-    
     try:
         # 直接调用 generate_response，让其内部处理配置加载和兜底逻辑
         generated_portrait = llm.generate_response(
@@ -241,7 +238,6 @@ async def generate_style_analysis(user_id: str, common: CommonSettings, mix_name
     llm = get_llm_service()
     
     style_analysis = "Style analysis unavailable."
-    
     try:
         if hasattr(llm, "generate_response_async"):
             style_analysis = await llm.generate_response_async(
@@ -298,7 +294,7 @@ async def generate_agent_thoughts(
     state: Dict[str, Any] = None
 ) -> Dict[str, str]:
     """
-    任务 3: 内部思维 (Personality Fusion Engine / MultiAgent)
+    任务 3: 内部思维 (MultiAgent 并发)
     """
     # 供预算账本记账;state 里没有就为 None(不计数,与旧行为一致)
     execution_id = (state or {}).get("execution_id")
@@ -321,31 +317,6 @@ async def generate_agent_thoughts(
     
     active_names = [name for name, _ in top_personas]
     
-    # PHASE 1.2: Personality Fusion Engine
-    if active_profiles_list:
-        try:
-            # Build map for fusion engine: only active names
-            active_profiles_map = {
-                p.name: p 
-                for p, w in active_profiles_list 
-                if p.name in active_names
-            }
-            
-            if active_profiles_map:
-                fusion_state = state if state else {"user_input": user_input}
-                result = await fusion_engine.run(fusion_state, active_profiles_map)
-                
-                # Extract thoughts
-                thoughts = result.get("internal_monologues", {})
-                
-                if "fusion_strategy" in result:
-                    logger.info(f"Fusion Strategy: {result['fusion_strategy']}")
-                    
-                return thoughts
-                
-        except Exception as e:
-            logger.error(f"Fusion Engine failed: {e}, falling back to MultiAgentService")
-            # Fallthrough to legacy method
     
     try:
         # 使用新的异步 Lite MultiAgent 服务

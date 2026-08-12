@@ -1,3 +1,4 @@
+from __future__ import annotations
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from .config import settings
@@ -24,7 +25,7 @@ class LLMService:
         return cls._instance
 
     @staticmethod
-    def _normalize_api_key(api_key: str | None) -> str | None:
+    def _normalize_api_key(api_key: Optional[str]) -> Optional[str]:
         if api_key is None:
             return None
         key = str(api_key).strip()
@@ -45,7 +46,7 @@ class LLMService:
         return key
 
     @staticmethod
-    def _normalize_base_url(url: str | None) -> str | None:
+    def _normalize_base_url(url: Optional[str]) -> Optional[str]:
         if not url:
             return url
         

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from datetime import datetime
 
 class HolidayManager:
@@ -72,7 +73,7 @@ class HolidayManager:
     }
 
     @staticmethod
-    def get_holiday(date_obj: datetime) -> str | None:
+    def get_holiday(date_obj: datetime) -> Optional[str]:
         """
         根据日期对象返回节日名称，如果没有节日则返回 None。
         优先匹配具体日期表（农历/变动），其次匹配公历固定表。
