@@ -8,6 +8,9 @@ from app.prompts import RoleProfile, CommonSettings
 import os
 import json
 
+# Provider 配置在 Redis 里是**缓存**,真源是 server_config.json ——
+# 读取侧未命中时会回落到文件并回填(见 core/llm.py 的自愈逻辑)。
+# 有 TTL 才符合"Redis 只做缓存、丢了能重建"这条收敛后的规则。
 PROVIDER_CACHE_TTL = 24 * 3600
 import structlog
 from app.core.cache import redis_client
@@ -17,7 +20,7 @@ from app.core.config import settings
 logger = structlog.get_logger()
 
 
-def _normalize_api_key(api_key: Optional[str]) -> Optional[str]:
+def _normalize_api_key(api_key: str | None) -> str | None:
     if api_key is None:
         return None
     key = str(api_key).strip()
@@ -37,26 +40,24 @@ def _normalize_api_key(api_key: Optional[str]) -> Optional[str]:
 
     return key
 
-
-def _normalize_base_url(url: Optional[str]) -> Optional[str]:
+def _normalize_base_url(url: str | None) -> str | None:
     if not url:
         return url
+    
+    # 移除常见的包裹字符和末尾逗号
     return str(url).strip().strip("',`\" ").rstrip(",").strip("',`\" ")
-
 
 async def load_llm_providers_to_redis():
     """
-    系统启动时，将 LLM 配置加载到 Redis 和内存配置管理器。
-
-    统一 OpenAI 兼容接口：
-    - 从 llm_providers.json 读取基础配置模板
-    - 用环境变量覆盖 base_url / model_name / api_key
-    - 用户可通过界面或 .env 自定义任意第三方服务
+    系统启动时，将 LLM 配置（含环境变量中的 Key）加载到 Redis 和内存配置管理器。
     """
     try:
+        # 修改：从根目录加载 llm_providers.json
+        # 用共享常量,不要数 dirname 层数 —— 本文件从 app/core/ 移到
+        # app/services/system/ 时层数没跟着改,曾去 app/ 下找这个文件。
         from app.core.paths import SERVER_DIR
         config_path = os.path.join(SERVER_DIR, "llm_providers.json")
-
+        
         if not os.path.exists(config_path):
             logger.warning(f"LLM providers config file not found at {config_path}")
             return
@@ -65,39 +66,41 @@ async def load_llm_providers_to_redis():
             providers = json.load(f)
 
         for key, config in providers.items():
-            # 从环境变量注入 API Key
+            # 尝试从环境变量注入 API Key
             api_key_env = config.get("api_key_env")
             if api_key_env:
                 env_key = os.environ.get(api_key_env)
                 if env_key:
+                    # 将解析后的 Key 注入到配置中，方便后续直接使用
+                    # 注意：虽然我们在 Redis 中存储了 Key，但要确保 Redis 实例安全
                     config["api_key"] = _normalize_api_key(env_key)
-
-            # 从环境变量覆盖 base_url（用户自定义）
-            custom_base_url = os.environ.get("OPENAI_BASE_URL")
-            if custom_base_url:
-                config["base_url"] = _normalize_base_url(custom_base_url)
-
-            # 从环境变量覆盖 model_name（用户自定义）
-            custom_model = os.environ.get("LLM_MODEL_NAME")
-            if custom_model:
-                config["model"] = custom_model.strip()
-
-            # 1. 存入内存配置管理器
+            
+            # 1. 存入内存配置管理器 (同步/线程安全)
             llm_config_manager.set_provider_config(key, config)
 
-            # 2. 存入 Redis 缓存
+            # 2. 构建 Redis Key 并存入 Redis
             redis_key = f"system:llm:provider:{key}"
             if redis_client.enabled:
+                # 这是**缓存**:真源是 server_config.json,读取侧(api/routers/config.py、
+                # core/llm.py)在未命中时会回落到文件并自愈,所以可以安全过期。
+                # 原先 ttl=None 让它变成了"存在内存里的长期数据",而嵌入模式下
+                # 内存 Redis 重启即空 —— 既没有持久性,又绕过了"缓存必须能重建"的约束。
                 await redis_client.set(redis_key, json.dumps(config), ttl=PROVIDER_CACHE_TTL)
-
+            
             logger.info(f"Loaded LLM provider config: {key}")
 
         # 设置默认 Provider
         default_provider = settings.DEFAULT_LLM_PROVIDER
         if default_provider:
+            # 真源是 settings.DEFAULT_LLM_PROVIDER(来自 server_config.json,持久)。
+            # 原先还往 Redis 写一份 system:llm:current_provider —— 全库**只写不读**,
+            # 是纯粹的死数据,删掉。
             llm_config_manager.set_current_provider(default_provider)
-
-        # 清除 MemoryService 缓存
+            
+        # 让依赖 provider 的缓存实例失效。
+        # MemoryService 由 @lru_cache 构造,provider 在首次构造时就定死了 ——
+        # 用户后来补配密钥或换了服务商,它仍抱着旧配置(或仍是构造失败的状态),
+        # 直到重启才恢复。热重载既然发生了,这里必须一并清掉。
         try:
             from app.services.memory.store import get_memory_service
             get_memory_service.cache_clear()
@@ -108,61 +111,124 @@ async def load_llm_providers_to_redis():
     except Exception as e:
         logger.error(f"Failed to load LLM providers: {e}")
 
-
 async def init_portraits():
     """
     检查并缓存预设角色的画像。
     """
+    # 同上:用共享常量而非数层数(本文件移动过两层,曾指向 app/)
     from app.core.paths import SERVER_DIR
     settings_path = os.path.join(SERVER_DIR, "default_settings.json")
-
+    
     if not os.path.exists(settings_path):
         return
 
     try:
         with open(settings_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-
+            
         for key, config in data.items():
-            if not isinstance(config, dict):
-                continue
+            if not isinstance(config, dict): continue
             name = config.get("name")
-            if not name:
-                continue
-
+            if not name: continue
+            
+            # Check Redis (Use a specific key for default portraits)
             cache_key = f"portrait_default:{name}"
-            cached = await redis_client.get(cache_key)
+            
+            # TODO: Remove this force-clear after verification
+            # Force clear cache to verify LLM generation on startup
+            # if redis_client.enabled:
+            #     await redis_client.delete(cache_key)
+            #     logger.info(f"Force cleared cache for {name} to verify LLM generation.")
 
+            cached = await redis_client.get(cache_key)
+            
             if not cached:
                 logger.info(f"Generating initial portrait for {name} using LLM...")
                 try:
+                    # Filter config to match CommonSettings fields
                     valid_fields = CommonSettings.model_fields.keys()
                     filtered_config = {k: v for k, v in config.items() if k in valid_fields}
-
+                    
+                    settings_obj = CommonSettings(**filtered_config)
+                    
+                    # Import here to avoid circular imports if any
                     from app.services.dialogue.generation import generate_character_portrait_async
-                    from app.core.llm_config import is_any_llm_configured
-
-                    if not is_any_llm_configured():
-                        logger.info("LLM not configured yet, skipping portrait generation")
-                        continue
-
-                    portrait = await generate_character_portrait_async(
-                        CommonSettings(**filtered_config),
-                        session=SessionLocal(),
-                    )
+                    
+                    # Generate
+                    start_time = os.times()
+                    portrait = await generate_character_portrait_async("system_init", settings_obj)
+                    
                     if portrait:
-                        await redis_client.set(cache_key, json.dumps(portrait), ttl=3600 * 24 * 7)
-                        logger.info(f"Portrait generated and cached for {name}")
+                        logger.info(f"Successfully generated portrait for {name}. Length: {len(portrait)}")
+                        # Cache indefinitely
+                        await redis_client.set(cache_key, portrait, ttl=86400 * 30)
+                        logger.info(f"Portrait for {name} cached.")
+                    else:
+                        logger.warning(f"Generated portrait for {name} is empty.")
                 except Exception as e:
-                    logger.warning(f"Failed to generate portrait for {name}: {e}")
-
+                    logger.error(f"Failed to generate portrait for {name}: {e}")
+            else:
+                logger.info(f"Portrait for {name} already cached. Skipping LLM generation.")
+                
     except Exception as e:
-        logger.error(f"Failed to init portraits: {e}")
+        logger.error(f"Error in init_portraits: {e}")
 
+# New profiles based on Zhihu article: 6 Love Styles
+# Note: Gender, Age, Occupation, Backstory, World Setting are now in CommonSettings
+INITIAL_PROFILES = [
+    RoleProfile(
+        name="Eros", # 爱欲型
+        description="浪漫、热情、关注外表吸引力。相信一见钟情，追求强烈的化学反应。性爱热烈且令人满足。",
+        style=["热情", "浪漫", "直白", "赞美"],
+        constraints=["表达强烈的爱意", "关注对方的外表和魅力", "强调一见钟情的感觉"]
+    ),
+    RoleProfile(
+        name="Ludus", # 游戏型
+        description="把恋爱当作游戏，追求乐趣和刺激。不愿给承诺，喜欢保持神秘和距离感。可能同时与多人交往，视爱与性为“战利品”。",
+        style=["幽默", "调情", "玩世不恭", "神秘"],
+        constraints=["避免做出长期承诺", "保持轻松愉快的对话氛围", "将关系视为游戏"]
+    ),
+    RoleProfile(
+        name="Storge", # 友伴型
+        description="慢热、基于友谊的爱。追求安稳、信任和舒适。从朋友发展为恋人，维持深刻、长期的友谊。从肢体接触中获得快乐。",
+        style=["温和", "支持", "耐心", "可靠"],
+        constraints=["提供稳定的情感支持", "强调信任和陪伴", "表现出像老朋友一样的关心"]
+    ),
+    RoleProfile(
+        name="Pragma", # 现实型
+        description="理性、冷静、务实。考虑现实条件（家庭、能力、职业帮助）。敦促伴侣努力向上，若符合要求则保持承诺。",
+        style=["理智", "客观", "建议", "规划"],
+        constraints=["提供实际的建议", "关注长期规划和价值", "基于现实条件评估关系"]
+    ),
+    RoleProfile(
+        name="Mania", # 狂热型
+        description="情绪化、占有欲强、依赖性强。喜怒无常，完全以对方为中心。有强烈的占有欲和嫉妒心，无法专心做别的事。",
+        style=["情绪化", "激烈", "依赖", "疑问"],
+        constraints=["表现出强烈的依赖和不安全感", "对用户的关注极其敏感", "表现出嫉妒和占有欲"]
+    ),
+    RoleProfile(
+        name="Agape", # 奉献型
+        description="无私、利他、奉献。愿意牺牲自己满足对方。把爱视为一种责任。在对方困难时全力相助，不求回报。",
+        style=["无私", "关怀", "顺从", "温暖"],
+        constraints=["优先满足用户需求", "即使牺牲自己也不抱怨", "视爱为责任和付出"]
+    )
+]
 
 def init_personality_data(db: Session):
-    """初始化人格数据。"""
-    try:
-        load_default_settings(db)
-    except Exception as e:
-        logger.error(f"Failed to init personality data: {e}")
+    # 如果不存在，初始化通用设置
+    if not db.query(CommonSettingsDB).first():
+        default_settings = load_default_settings()
+        common = CommonSettingsDB(
+            id=1,
+            **default_settings
+        )
+        db.add(common)
+
+    # 初始化角色配置
+    existing_profiles = {p.name for p in db.query(RoleProfileDB).all()}
+    for profile in INITIAL_PROFILES:
+        if profile.name not in existing_profiles:
+            db_obj = RoleProfileDB(**profile.model_dump())
+            db.add(db_obj)
+    
+    db.commit()
