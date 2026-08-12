@@ -16,7 +16,7 @@ class AsyncReflexionSystem:
     Uses ReflexionService for Q_I calculation and pending turn management.
     """
     def __init__(self):
-        self.queue = asyncio.Queue()
+        self.queue = None  # 延迟到 start() 中创建,确保绑定到正确的 event loop
         self._running = False
         self.service = ReflexionService()
         
@@ -24,6 +24,9 @@ class AsyncReflexionSystem:
         if self._running:
             return
         self._running = True
+        # 在 start() 中创建 Queue,确保绑定到当前运行的 event loop
+        if self.queue is None:
+            self.queue = asyncio.Queue()
         logger.info("Starting AsyncReflexionSystem worker...")
         asyncio.create_task(self._worker())
 
@@ -41,6 +44,9 @@ class AsyncReflexionSystem:
             "history": list (optional)
         }
         """
+        if self.queue is None:
+            logger.warning("Reflexion queue not initialized, dropping event")
+            return
         qsize = self.queue.qsize()
         await self.queue.put(event)
         logger.info(f"Reflexion event enqueued for user {event.get('user_id')}", 
