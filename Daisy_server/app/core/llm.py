@@ -12,6 +12,11 @@ import threading
 
 logger = structlog.get_logger()
 
+# generate_response / generate_response_async 失败时**不抛异常**,而是返回以此开头的字符串。
+# 调用方必须据此识别失败:情绪翻译曾把 "Error generating response: ..." 当成译文
+# 喂给 GoEmotions,实测得到 neutral 0.99999 —— 看起来像结果,其实是噪声。
+LLM_ERROR_PREFIX = "Error generating response:"
+
 class LLMService:
     _instance = None
     _lock = threading.Lock()
@@ -409,7 +414,7 @@ class LLMService:
             logger.error("LLM Generation Failed", error=str(e))
             self._mark_key_invalid_if_auth_error(e, provider_config)
             self._log_trace(user_settings, metadata, system_prompt, content, None, error=str(e))
-            return f"Error generating response: {e}"
+            return f"{LLM_ERROR_PREFIX} {e}"
 
     async def generate_response_async(self, system_prompt: str, user_input: str, context: str, user_settings=None, metadata: dict = None, request_timeout: int = None, max_retries: int = None, streaming: bool = False) -> str:
         """
@@ -502,7 +507,7 @@ class LLMService:
             logger.error("Async LLM Generation Failed", error=str(e))
             self._mark_key_invalid_if_auth_error(e, provider_config)
             self._log_trace(user_settings, metadata, system_prompt, content, None, error=str(e))
-            return f"Error generating response: {e}"
+            return f"{LLM_ERROR_PREFIX} {e}"
 
 llm_service = LLMService()
 

@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import time
 import uuid
+from typing import Any, Dict, List
 import structlog
 from ..capability import essential, enhancement
 from ...core.config import settings
@@ -19,6 +20,69 @@ from ...services.memory.chat_history import history_service
 from ...core.exceptions import NodeError
 
 logger = structlog.get_logger()
+
+
+def build_analysis_text(context_msgs: List[str], text: str) -> str:
+    """
+    拼出送去情绪分析的文本:最近几条历史(EMOTION_CONTEXT_TURNS)+ 当前输入。
+
+    上下文尾部按 EMOTION_CONTEXT_MAX_CHARS 封顶。这个配置项自建库起就存在却从未被
+    用到,后果是:历史里一条长 AI 回复就能把合并文本撑过 EMOTION_TEXT_TRUNCATE_LIMIT,
+    而那次截断保留的是**开头** —— 被切掉的恰好是排在末尾的当前输入。实测 2639 字符的
+    "长解释 + 我只想哭"得到 neutral 0.99,单独分析那句话是 sadness 0.999。
+    """
+    msgs = list(context_msgs)
+    # 当前消息已预存进库,会出现在历史末尾;去掉它,避免在合并文本里重复
+    if msgs and msgs[-1] == text:
+        msgs.pop()
+    context_text = " ".join(msgs)
+    limit = settings.EMOTION_CONTEXT_MAX_CHARS
+    if limit and len(context_text) > limit:
+        context_text = context_text[-limit:]  # 留最近的部分
+    return f"{context_text} {text}".strip()
+
+
+def select_context_messages(recent_msgs) -> List[str]:
+    """
+    从最近历史里挑情绪分析的上下文:只要**用户自己**最近 EMOTION_CONTEXT_TURNS 条。
+
+    原实现把 AI 回复也算了进去(与它上方"获取最近的用户消息"的注释相反),等于把
+    AI 的情绪记在用户头上。用本地模型实测:
+      - 一条欢快的 AI 回复 + 用户一句 "ok"            → joy 0.51
+      - 一条长 AI 解释 + "我只想哭"(上下文已封顶)      → neutral 0.61 / sadness 0.37
+      - 换成用户自己的前两句做上下文 + "我只想哭"       → sadness 0.997
+    """
+    user_msgs = [m.content for m in recent_msgs
+                 if getattr(m, "role", None) == "user" and m.content]
+    return user_msgs[-settings.EMOTION_CONTEXT_TURNS:]
+
+
+# 高唤醒/认知类情感:好奇、困惑、惊讶 -> 认知投入;兴奋、快乐、愤怒、恐惧、渴望、爱 -> 情感唤醒
+_AROUSAL_KEYS = ['curiosity', 'confusion', 'surprise', 'realization',
+                 'excitement', 'joy', 'anger', 'fear', 'desire', 'love']
+
+
+def summarize_emotion(scores: Dict[str, float], service) -> Dict[str, Any]:
+    """
+    把 GoEmotions 原始分数折成节点要的几个量:Ekman 分布、Top-3、中性分、强度、最大唤醒。
+
+    scores 为空表示本轮分析不可用(翻译失败/模型报错)。这时必须返回"没有数据",
+    不能照常计算:对全 0 的 Ekman 分布排序,首位恒为 anger(映射表里的第一个键),
+    它会被写进 user:{uid}:last_emotion、注入回复提示词 —— 一个与用户无关的信号。
+    """
+    if not scores:
+        return {"ekman_scores": {}, "top": [], "neutral_score": 0.0,
+                "intensity": 0.0, "max_arousal": 0.0}
+
+    # Ekman 映射:将复杂的 GoEmotions 映射到 6 种基本情感 + 中性
+    ekman_scores = service._map_to_ekman(scores)
+    top = sorted(ekman_scores.items(), key=lambda x: x[1], reverse=True)[:3]
+    # 投入度用原始 GoEmotions 分数做细粒度度量:强度 = 非中性程度
+    neutral_score = scores.get('neutral', 0.0)
+    max_arousal = max((scores[k] for k in _AROUSAL_KEYS if k in scores), default=0.0)
+    return {"ekman_scores": ekman_scores, "top": top, "neutral_score": neutral_score,
+            "intensity": 1.0 - neutral_score, "max_arousal": max_arousal}
+
 
 @essential
 @monitor_execution_time
@@ -59,7 +123,7 @@ async def analyze_emotion(state: AgentState) -> AgentState:
 
         # 2. 上下文合并策略 (带窗口限制)
         # 获取最近的用户消息，为短输入提供更好的上下文
-        context_text = ""
+        context_msgs: List[str] = []
         try:
             # 架构调整：基于时间窗口获取最近历史 (最近 1 小时即可，情感分析不需要太久)
             try:
@@ -74,23 +138,15 @@ async def analyze_emotion(state: AgentState) -> AgentState:
                      days=0.04, # ~1 hour
                      exclude_statuses=["pending", "processing", "failed"]
                  )
-                 # 只取最近的 N 条 (settings.EMOTION_CONTEXT_TURNS)
-                 return [m.content for m in recent_msgs[-settings.EMOTION_CONTEXT_TURNS:]]
+                 # 只取用户自己最近的 N 条 (settings.EMOTION_CONTEXT_TURNS),见 select_context_messages
+                 return select_context_messages(recent_msgs)
 
-            msgs = await loop.run_in_executor(None, fetch_recent_context)
-            
-            # 过滤掉当前正在处理的消息（因为它已经被预存到数据库中了，会出现在 history 的最后）
-            # 避免在 full_text = context + text 时重复
-            if msgs and msgs[-1] == text:
-                msgs.pop()
-                
-            if msgs:
-                context_text = " ".join(msgs)
+            context_msgs = await loop.run_in_executor(None, fetch_recent_context)
         except Exception as e:
             logger.error(f"获取情感分析上下文历史失败: {e}")
             
-        # 合并上下文 + 当前输入
-        full_text = f"{context_text} {text}".strip()
+        # 合并上下文 + 当前输入(去重当前消息、上下文按 EMOTION_CONTEXT_MAX_CHARS 封顶)
+        full_text = build_analysis_text(context_msgs, text)
         
         service = get_emotion_service()
         
@@ -135,29 +191,14 @@ async def analyze_emotion(state: AgentState) -> AgentState:
         scores = await service.analyze_async(full_text, user_settings=common, trigger_message_id=user_message_id, user_id=user_id, original_text=text,
                                              execution_id=state.get("execution_id"))
         
-        # Ekman 映射 (用户需求)
-        # 将复杂的 GoEmotions 映射到 6 种基本情感
-        ekman_scores = service._map_to_ekman(scores)
-        sorted_ekman = sorted(ekman_scores.items(), key=lambda x: x[1], reverse=True)
-        top = sorted_ekman[:3]
-        
-        # 计算投入度分数 (Interest Index)
-        # 注意：我们仍然使用原始的 GoEmotions 分数来进行细粒度的投入度度量
-        
-        # 1. 强度 (非中性程度)
-        neutral_score = scores.get('neutral', 0.0)
-        intensity = 1.0 - neutral_score
-        
-        # 2. 特定的高唤醒/认知情感
-        # 好奇、困惑、惊讶 -> 认知投入
-        # 兴奋、快乐、愤怒、恐惧、渴望、爱 -> 情感唤醒
-        arousal_keys = ['curiosity', 'confusion', 'surprise', 'realization', 
-                        'excitement', 'joy', 'anger', 'fear', 'desire', 'love']
-        
-        max_arousal = 0.0
-        for key in arousal_keys:
-            if key in scores:
-                max_arousal = max(max_arousal, scores[key])
+        # Ekman 映射 + 投入度原料。scores 为空(分析不可用)时得到"没有数据",
+        # 而不是全 0 排序出来的假 anger —— 见 summarize_emotion
+        summary = summarize_emotion(scores, service)
+        ekman_scores = summary["ekman_scores"]
+        top = summary["top"]
+        neutral_score = summary["neutral_score"]
+        intensity = summary["intensity"]
+        max_arousal = summary["max_arousal"]
                 
         # 3. 输入长度因子 (对数式封顶)
         # 简单的线性增长，50字符达到 1.0

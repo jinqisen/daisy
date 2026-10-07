@@ -159,11 +159,16 @@ class RedisClient:
 # Global instance
 redis_client = RedisClient.get_instance()
 
-def cache_result(ttl: int = 3600, key_prefix: str = "", key_builder: Callable = None):
+def cache_result(ttl: int = 3600, key_prefix: str = "", key_builder: Callable = None,
+                 should_cache: Optional[Callable[[Any], bool]] = None):
     """
     Decorator to cache async function results in Redis.
     Uses function name and arguments to generate key.
     If key_builder is provided, it's used to generate the key part from arguments.
+
+    should_cache(result) 返回 False 时只返回结果、不写缓存。用于"算出来了但不可信"
+    的结果:情绪分析在翻译失败/模型报错时返回空字典,若照常缓存 24 小时,
+    一次 LLM 抖动就会把这段文本钉死成"没有情绪",之后每轮都命中这个坏答案。
     """
     def decorator(func: Callable):
         @functools.wraps(func)
@@ -198,6 +203,8 @@ def cache_result(ttl: int = 3600, key_prefix: str = "", key_builder: Callable = 
             # Cache result
             if result is not None:
                 try:
+                    if should_cache is not None and not should_cache(result):
+                        return result
                     if isinstance(result, (dict, list, str, int, float, bool)):
                         val = json.dumps(result)
                         await redis_client.set(key, val, ttl=ttl)

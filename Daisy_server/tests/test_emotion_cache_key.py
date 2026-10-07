@@ -97,7 +97,7 @@ def _fake_service(calls):
     svc = EmotionService.__new__(EmotionService)
     svc.model_name = "fake"
 
-    def classifier(text):
+    def classifier(text, **kwargs):  # 真实 pipeline 还会收到 truncation=True
         calls.append(text)
         label = "joy" if "happy" in text else "anger"
         return [[{"label": label, "score": 0.9}, {"label": "neutral", "score": 0.1}]]

@@ -8,7 +8,7 @@ from functools import lru_cache
 from app.core.config import settings
 from app.core.constants import EMOTION_TEXT_TRUNCATE_LIMIT, EMOTION_CACHE_TTL, EMOTION_TOP_K
 from app.core.utils import is_chinese
-from app.core.llm import get_llm_service # Import LLM service
+from app.core.llm import get_llm_service, LLM_ERROR_PREFIX
 from app.core.cache import cache_result
 import re
 
@@ -108,8 +108,14 @@ class EmotionService:
         
         return ekman_scores
 
-    def _translate_to_english(self, text: str, user_settings=None, trigger_message_id: int = None, user_id: str = None, original_text: str = None, execution_id: str = None) -> str:
-        """使用 LLM 将文本翻译为英文"""
+    def _translate_to_english(self, text: str, user_settings=None, trigger_message_id: int = None, user_id: str = None, original_text: str = None, execution_id: str = None) -> Optional[str]:
+        """
+        使用 LLM 将文本翻译为英文;失败返回 None。
+
+        失败时**不能**退回原文:GoEmotions 是英文模型,中文原文喂进去实测恒为
+        neutral 0.99999 —— 看起来像一个很确定的结果,其实是噪声。调用方据 None
+        放弃本轮分析,比交出一个假的 neutral 诚实得多。
+        """
         from app.prompts.templates import get_translation_prompt, get_translation_system_prompt
         llm = get_llm_service()
         
@@ -138,31 +144,50 @@ class EmotionService:
             request_timeout=60, # 60秒超时
             max_retries=0      # 不重试
         )
+            # generate_response 失败时不抛异常,而是返回 "Error generating response: ..." 字符串。
+            # 旧实现只接异常,这段错误文案就被当成译文送进模型 —— 结果同样是 neutral 0.99999。
+            if not english_text or english_text.startswith(LLM_ERROR_PREFIX):
+                logger.warning(f"Translation failed (LLM error): {(english_text or '')[:80]!r}")
+                return None
             # 清理 LLM 可能产生的多余输出 (尽管提示词要求 ONLY)
             english_text = english_text.strip().strip('"')
+            if not english_text:
+                logger.warning("Translation failed (empty translation)")
+                return None
             logger.info(f"Translated for Emotion: '{text[:20]}...' -> '{english_text[:50]}...'")
             return english_text
         except Exception as e:
-            logger.warning(f"Translation failed (fallback to original): {e}")
-            return text
+            logger.warning(f"Translation failed: {e}")
+            return None
 
     def analyze(self, text: str, user_settings=None, trigger_message_id: int = None, user_id: str = None, original_text: str = None, execution_id: str = None) -> Dict[str, float]:
         """
-        分析文本并返回 {emotion: score} 字典
+        分析文本并返回 {emotion: score} 字典。
+
+        分析不可用时返回**空字典**,而不是编一个结果:
+        - 中文翻译失败:英文模型吃中文原文实测恒为 neutral 0.99999,是噪声不是信号;
+        - 模型报错:旧实现返回 {"error": 0.0},节点对全 0 的 Ekman 分布排序后首位恒为
+          anger,会被写进用户状态并注入回复提示词 —— 一个与用户无关的信号。
+        空字典不会被 analyze_async 缓存(见 should_cache),下一轮会重新分析。
         """
         if not self.classifier:
             logger.warning("Emotion classifier not initialized, returning neutral scores")
             return {"neutral": 1.0}
 
+        # 1. 检查是否需要翻译
+        analysis_text = text
+        if is_chinese(text):
+            # 如果是中文，先翻译成英文（因为 GoEmotions 是英文模型）
+            analysis_text = self._translate_to_english(text, user_settings, trigger_message_id, user_id, original_text, execution_id=execution_id)
+            if analysis_text is None:
+                logger.warning("Emotion analysis skipped this turn: translation unavailable")
+                return {}
+
         try:
-            # 1. 检查是否需要翻译
-            analysis_text = text
-            if is_chinese(text):
-                # 如果是中文，先翻译成英文（因为 GoEmotions 是英文模型）
-                analysis_text = self._translate_to_english(text, user_settings, trigger_message_id, user_id, original_text, execution_id=execution_id)
-            
-            # 2. 截断文本至 512 字符以避免超出模型限制
-            results = self.classifier(analysis_text[:EMOTION_TEXT_TRUNCATE_LIMIT])
+            # 2. 先按字符截断,再让 tokenizer 按 512 token 截断。字符数防不住 token 数:
+            #    2048 个字符的短词文本实测 685 token,不开 truncation 直接 RuntimeError,
+            #    长上下文下情绪分析整轮失败。
+            results = self.classifier(analysis_text[:EMOTION_TEXT_TRUNCATE_LIMIT], truncation=True)
             
             # results 是字典列表的列表: [[{'label': 'joy', 'score': 0.9}, ...]]
             # 展平并转换为字典
@@ -170,7 +195,7 @@ class EmotionService:
             return scores
         except Exception as e:
             logger.error(f"Error during emotion analysis: {e}")
-            return {"error": 0.0}
+            return {}
 
     def get_ekman_scores(self, text: str) -> Dict[str, float]:
         scores = self.analyze(text)
@@ -181,7 +206,9 @@ class EmotionService:
         sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         return sorted_scores[:top_k]
 
-    @cache_result(ttl=EMOTION_CACHE_TTL, key_builder=emotion_key_builder)
+    # should_cache=bool:空字典表示"本轮分析不可用"(翻译失败/模型报错)。
+    # 若也缓存 24 小时,一次 LLM 抖动就会把这段文本钉死成"没有情绪"。
+    @cache_result(ttl=EMOTION_CACHE_TTL, key_builder=emotion_key_builder, should_cache=bool)
     async def analyze_async(self, text: str, user_settings=None, trigger_message_id: int = None, user_id: str = None, original_text: str = None, execution_id: str = None) -> Dict[str, float]:
         """
         Async wrapper for analyze with Redis caching.
