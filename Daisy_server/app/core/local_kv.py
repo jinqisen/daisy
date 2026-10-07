@@ -12,6 +12,7 @@
 没有任何持久数据依赖它,替换就成了纯粹的实现替换。
 
 服务端部署仍然用真 Redis(多进程需要共享状态);这里只接管 EMBEDDED_MODE。
+(上面的统计漏了 ReflexionPatcher 的列表操作 rpush/lrange/ltrim,已补上 —— 见 _Store 的列表段。)
 接口按**实际用到的**那部分实现,不追求兼容 Redis 全集 ——
 用不到的方法不实现,才不会有人误以为它们能用。
 """
@@ -164,6 +165,61 @@ class _Store:
             v = self._get_raw(key)
             return dict(v) if isinstance(v, dict) else {}
 
+    # -- 列表 ----------------------------------------------------------------
+    # 唯一使用者是 ReflexionPatcher 的补丁列表(rpush 追加、ltrim 封顶、lrange 读尾部)。
+    # 第一版统计调用点时漏掉了这一组:嵌入模式下补丁读写每轮都报
+    # "'LocalKVAsync' object has no attribute 'lrange'" 后回退 JSONL,而且迁移标记
+    # 写不进去,每次读取都重读整个 JSONL —— 正是 Redis 化想省掉的那次全量读。
+
+    def _list(self, key: str) -> List[str]:
+        with self._lock:
+            v = self._get_raw(key)
+            if not isinstance(v, list):
+                v = []
+                self._set_raw(key, v, None)
+            return v
+
+    @staticmethod
+    def _slice(n: int, start: int, stop: int) -> Optional[slice]:
+        """Redis 的区间语义:两端都含、负数从尾部数、越界自动截断;空区间返回 None。"""
+        if start < 0:
+            start = max(n + start, 0)
+        if stop < 0:
+            stop = n + stop
+        stop = min(stop, n - 1)
+        if start > stop:
+            return None
+        return slice(start, stop + 1)
+
+    def rpush(self, key: str, *values: Any) -> int:
+        with self._lock:
+            lst = self._list(key)
+            lst.extend(str(v) for v in values)
+            return len(lst)
+
+    def lrange(self, key: str, start: int, stop: int) -> List[str]:
+        with self._lock:
+            v = self._get_raw(key)
+            if not isinstance(v, list):
+                return []
+            s = self._slice(len(v), start, stop)
+            return list(v[s]) if s is not None else []
+
+    def ltrim(self, key: str, start: int, stop: int) -> bool:
+        with self._lock:
+            v = self._get_raw(key)
+            if not isinstance(v, list):
+                return True
+            s = self._slice(len(v), start, stop)
+            if s is None:
+                # Redis 语义:裁成空列表等于删除这个键
+                self._data.pop(key, None)
+                return True
+            kept = s.stop - s.start
+            del v[:s.start]
+            del v[kept:]
+            return True
+
     # -- 通用 ----------------------------------------------------------------
 
     def delete(self, *keys: str) -> int:
@@ -267,7 +323,8 @@ class _Pipeline:
     只缓冲命令、execute 时依次执行。
 
     单进程内不存在网络往返,pipeline 的意义只剩"一组命令一起提交";
-    这里按顺序执行即可(budget.py 是唯一使用者:几个 hincrby 加一个 expire)。
+    这里按顺序执行即可(budget.py:几个 hincrby 加一个 expire;ReflexionPatcher:
+    rpush 加 ltrim,以及迁移时的一批 rpush 加一个 set)。
     """
 
     def __init__(self, store: _Store) -> None:
@@ -288,6 +345,14 @@ class _Pipeline:
 
     def set(self, key: str, value: Any, ex: Optional[int] = None) -> "_Pipeline":
         self._ops.append(("set", (key, value, ex)))
+        return self
+
+    def rpush(self, key: str, *values: Any) -> "_Pipeline":
+        self._ops.append(("rpush", (key,) + tuple(values)))
+        return self
+
+    def ltrim(self, key: str, start: int, stop: int) -> "_Pipeline":
+        self._ops.append(("ltrim", (key, start, stop)))
         return self
 
     async def execute(self) -> List[Any]:
@@ -347,6 +412,15 @@ class LocalKVAsync:
 
     async def hgetall(self, key: str) -> Dict[str, str]:
         return self._store.hgetall(key)
+
+    async def rpush(self, key: str, *values: Any) -> int:
+        return self._store.rpush(key, *values)
+
+    async def lrange(self, key: str, start: int, stop: int) -> List[str]:
+        return self._store.lrange(key, start, stop)
+
+    async def ltrim(self, key: str, start: int, stop: int) -> bool:
+        return self._store.ltrim(key, start, stop)
 
     async def publish(self, channel: str, message: str) -> int:
         return self._hub.publish(channel, message)

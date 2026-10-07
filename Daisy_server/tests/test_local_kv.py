@@ -358,3 +358,86 @@ class TestUsedKwargsAreSupported:
             f"调用点用了 {sorted(missing)},而 LocalKVAsync.set 不接受 —— "
             f"运行时会抛 TypeError,而测试可能完全覆盖不到"
         )
+
+
+class TestListOps:
+    """
+    ReflexionPatcher 的补丁列表:rpush 追加、ltrim 封顶、lrange 读尾部。
+
+    第一版漏掉了这一组,嵌入模式下每轮生成都报
+    "Redis read failed, falling back to JSONL: 'LocalKVAsync' object has no attribute 'lrange'",
+    而且迁移标记写不进去,每次读取都重读整个 JSONL —— 正是 Redis 化想省掉的那次全量读。
+    """
+
+    def test_rpush_and_lrange_tail(self):
+        async def go():
+            r = LocalKVAsync()
+            assert await r.rpush("l", "a", "b") == 2
+            assert await r.rpush("l", "c") == 3
+            assert await r.lrange("l", 0, -1) == ["a", "b", "c"]
+            # patcher 读尾部的写法是 lrange(key, -READ_TAIL, -1),READ_TAIL 远大于列表长度:
+            # 起点越界必须截到 0,而不是算出一个负下标
+            assert await r.lrange("l", -100, -1) == ["a", "b", "c"]
+            assert await r.lrange("l", -2, -1) == ["b", "c"]
+            assert await r.lrange("l", 1, 1) == ["b"]
+        run(go())
+
+    def test_lrange_edge_cases(self):
+        async def go():
+            r = LocalKVAsync()
+            assert await r.lrange("nope", 0, -1) == []
+            await r.rpush("l", "a", "b", "c")
+            assert await r.lrange("l", 5, 10) == []                 # 起点越界
+            assert await r.lrange("l", 0, 100) == ["a", "b", "c"]   # 终点越界截断
+            assert await r.lrange("l", 2, 1) == []                  # 起点在终点之后
+            assert await r.lrange("l", 0, -10) == []                # 终点负越界
+        run(go())
+
+    def test_values_are_strings(self):
+        """与字符串键同一条约定:取出来一律是 str。"""
+        async def go():
+            r = LocalKVAsync()
+            await r.rpush("l", 1)
+            assert await r.lrange("l", 0, -1) == ["1"]
+        run(go())
+
+    def test_ltrim_keeps_the_tail(self):
+        """MAX_LIST_LEN 封顶的写法是 ltrim(key, -N, -1):保留最近 N 条。"""
+        async def go():
+            r = LocalKVAsync()
+            await r.rpush("l", *[str(i) for i in range(10)])
+            assert await r.ltrim("l", -3, -1) is True
+            assert await r.lrange("l", 0, -1) == ["7", "8", "9"]
+            await r.ltrim("l", 0, 0)
+            assert await r.lrange("l", 0, -1) == ["7"]
+        run(go())
+
+    def test_ltrim_to_empty_deletes_key(self):
+        async def go():
+            r = LocalKVAsync()
+            await r.rpush("l", "a")
+            await r.ltrim("l", 5, 10)
+            assert await r.exists("l") == 0
+            assert await r.lrange("l", 0, -1) == []
+        run(go())
+
+    def test_pipeline_rpush_then_ltrim(self):
+        """patcher 的写入就是这两步打包:追加一条,再把列表裁到上限;迁移则是一批 rpush 加一个 set。"""
+        async def go():
+            r = LocalKVAsync()
+            await r.rpush("l", "old1", "old2")
+            pipe = r.pipeline()
+            pipe.rpush("l", "new")
+            pipe.ltrim("l", -2, -1)
+            pipe.set("flag", "1")
+            await pipe.execute()
+            assert await r.lrange("l", 0, -1) == ["old2", "new"]
+            assert await r.get("flag") == "1"
+        run(go())
+
+    def test_list_does_not_masquerade_as_string(self):
+        async def go():
+            r = LocalKVAsync()
+            await r.rpush("l", "a")
+            assert await r.get("l") is None
+        run(go())
