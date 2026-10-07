@@ -1,7 +1,7 @@
 import os
 import asyncio
 import hashlib
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from transformers import pipeline
 import structlog
 from functools import lru_cache
@@ -14,17 +14,33 @@ import re
 
 logger = structlog.get_logger()
 
-def emotion_key_builder(func, *args, **kwargs):
-    # args[0] is self, args[1] is text
-    text = kwargs.get("text")
-    if not text and len(args) > 1:
-        text = args[1]
-    
-    if not text:
-        # Fallback if text is empty (shouldn't happen usually)
-        return f"emotion:empty"
-        
-    text_hash = hashlib.md5(text.encode()).hexdigest()
+def emotion_key_builder(*args, **kwargs) -> str:
+    """
+    为 analyze_async 生成缓存键。
+
+    `cache_result` 以**被装饰方法收到的原样参数**调用 key_builder,也就是
+    `key_builder(self, text, user_settings=..., ...)`,并不会把函数对象传进来。
+    旧签名写成 `(func, *args, **kwargs)`:self 被当成 func 吃掉、text 落在 args[0],
+    代码却去读 args[1],于是任何输入都得到常量 "emotion:empty" ——
+    一旦开启缓存(Redis 或嵌入模式的进程内 KV),所有文本命中同一条目:
+    同一用户第 2 轮起翻译与 GoEmotions 全被跳过,top_emotions 恒等于第 1 轮。
+
+    键只由 text 决定:analyze 节点传进来的 text 是「最近 EMOTION_CONTEXT_TURNS 条
+    历史 + 当前输入」合并后的 full_text,同一句话落在不同上下文里天然得到不同的键,
+    不必再把窗口大小单独编进键。original_text / user_id / trigger_message_id /
+    execution_id 不参与:模型输出只取决于送进去的文本,把每轮都变的元数据编进键
+    只会让缓存永远不命中。
+    """
+    text: Optional[str] = kwargs.get("text")
+    if text is None:
+        # 位置参数形态是 (self, text, ...)。只认字符串,不会再把 self 误当成文本
+        text = next((a for a in args if isinstance(a, str)), None)
+
+    if not text or not text.strip():
+        # 空文本没有情绪可分析,保留固定键
+        return "emotion:empty"
+
+    text_hash = hashlib.md5(text.encode("utf-8", errors="ignore")).hexdigest()
     return f"emotion:{text_hash}"
 
 class EmotionService:
